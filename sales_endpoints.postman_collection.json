@@ -1,0 +1,299 @@
+{
+  "info": {
+    "_postman_id": "3e5c9f8a-7b5d-4e1a-8f1c-9d2b3e4f5a6b",
+    "name": "Sales Tracking API - Sales",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Sales",
+      "item": [
+        {
+          "name": "Create Sale",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "customerName",
+                  "value": "John Doe",
+                  "type": "text"
+                },
+                {
+                  "key": "items",
+                  "value": "[{\"product\":\"{{productId}}\",\"quantity\":2}]",
+                  "type": "text"
+                },
+                {
+                  "key": "totalAmount",
+                  "value": "59.98",
+                  "type": "text"
+                },
+                {
+                  "key": "billPhoto",
+                  "type": "file",
+                  "src": "/path/to/bill.jpg"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/sales",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "sales"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get All Sales",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/sales?page=1&startDate=2025-01-01&endDate=2025-12-31",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "sales"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "startDate",
+                  "value": "2025-01-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2025-12-31"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Sale by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/sales/{{saleId}}",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "sales",
+                "{{saleId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Sale Status",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n                \"status\": \"completed\"\n              }"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/sales/{{saleId}}/status",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "sales",
+                "{{saleId}}",
+                "status"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cancel Sale",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n                \"reason\": \"Customer request\"\n              }"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/sales/{{saleId}}/cancel",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "sales",
+                "{{saleId}}",
+                "cancel"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Sales Stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/sales/stats?startDate=2025-01-01&endDate=2025-12-31",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "sales",
+                "stats"
+              ],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2025-01-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2025-12-31"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Daily Sales",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/sales/daily",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "sales",
+                "daily"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Refund Sale",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n                \"reason\": \"Defective product\",\n                \"items\": [{\"itemId\":\"{{itemId}}\",\"quantity\":1}]\n              }"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/sales/{{saleId}}/refund",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "sales",
+                "{{saleId}}",
+                "refund"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "BASE_URL",
+      "value": "http://localhost:5000",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "saleId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "productId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "itemId",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}
