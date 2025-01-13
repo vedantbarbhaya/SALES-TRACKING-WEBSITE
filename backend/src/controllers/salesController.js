@@ -10,7 +10,7 @@ export const createSale = asyncHandler(async (req, res) => {
   // Parse items if it's a string (from FormData)
   const items = typeof req.body.items === 'string' ? 
     JSON.parse(req.body.items) : req.body.items;
-  
+
   const { customerName, totalAmount, salesman} = req.body;
 
   // Validate items and calculate total
@@ -51,8 +51,9 @@ export const createSale = asyncHandler(async (req, res) => {
   const populatedSale = await Sale.findById(sale._id)
     .populate('store')
     .populate('salesperson', 'name')
-    .populate('items.product', 'name itemCode');
-
+    .populate('items.product', 'name itemCode')
+    select('-billPhoto.data'); 
+    
   // Don't send the binary data of the photo in the response
   const saleResponse = populatedSale.toObject();
   if (saleResponse.billPhoto) {
