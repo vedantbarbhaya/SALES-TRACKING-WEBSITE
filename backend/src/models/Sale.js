@@ -22,6 +22,14 @@ const saleItemSchema = new mongoose.Schema({
 });
 
 const saleSchema = new mongoose.Schema({
+  billPhoto: {
+    data: Buffer,
+    contentType: String
+  },
+  salesmanName: {
+    type: String,
+    required: true
+  },
   saleNumber: {
     type: String,
     unique: true
@@ -43,9 +51,6 @@ const saleSchema = new mongoose.Schema({
   totalAmount: {
     type: Number,
     required: true
-  },
-  billPhoto: {
-    type: String // URL or path to stored image
   },
   status: {
     type: String,

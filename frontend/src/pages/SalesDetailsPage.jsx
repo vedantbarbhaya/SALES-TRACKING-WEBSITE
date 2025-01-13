@@ -22,21 +22,30 @@ const SaleDetailsPage = () => {
   const [error, setError] = useState('');
   const [showImage, setShowImage] = useState(false);
 
+  console.log("Component rendering, ID:", id);
+
   useEffect(() => {
+    console.log("Fetching sale details for ID:", id);
     fetchSaleDetails();
   }, [id]);
 
   const fetchSaleDetails = async () => {
     try {
       setLoading(true);
+      console.log("Making API call for ID:", id);
       const data = await getSaleById(id);
+      console.log("Received data:", data);
       setSale(data);
     } catch (err) {
+      console.error("API error:", err);
       setError(handleApiError(err));
     } finally {
       setLoading(false);
     }
   };
+
+  console.log("Current state:", { loading, error, sale });
+
 
   if (loading) {
     return (
@@ -50,6 +59,14 @@ const SaleDetailsPage = () => {
     return (
       <div className="p-4">
         <Alert type="error">{error}</Alert>
+      </div>
+    );
+  }
+
+  if (!sale) {
+    return (
+      <div className="p-4">
+        <Alert type="error">Sale not found</Alert>
       </div>
     );
   }
@@ -118,7 +135,7 @@ const SaleDetailsPage = () => {
                 className="flex items-center justify-between py-2 border-b last:border-0"
               >
                 <div className="flex-1">
-                  <div className="font-medium">{item.productDetails.name}</div>
+                  <div className="font-medium">{item.product.name}</div>
                   <div className="text-sm text-gray-500">
                     {item.quantity} × ${item.price.toFixed(2)}
                   </div>

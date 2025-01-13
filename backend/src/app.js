@@ -13,7 +13,6 @@ import authRoutes from './routes/auth.js';
 import salesRoutes from './routes/sales.js';
 import productRoutes from './routes/products.js';
 import storeRoutes from './routes/stores.js';
-import { uploadsPath } from './config/upload.js';
 
 // ES modules fix for __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -33,8 +32,7 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve static files from upload directory
-app.use('/uploads', express.static(uploadsPath));
+
 
 // Routes
 app.use('/api/auth', authRoutes);

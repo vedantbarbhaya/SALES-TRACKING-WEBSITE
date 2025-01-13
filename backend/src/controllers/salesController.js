@@ -5,9 +5,14 @@ import Product from '../models/Product.js';
 // @desc    Create new sale
 // @route   POST /api/sales
 // @access  Private
+// Modify the createSale controller
 export const createSale = asyncHandler(async (req, res) => {
-  const { customerName, items, totalAmount, billPhoto } = req.body;
-  console.log(req.body)
+  // Parse items if it's a string (from FormData)
+  const items = typeof req.body.items === 'string' ? 
+    JSON.parse(req.body.items) : req.body.items;
+  
+  const { customerName, totalAmount, salesman} = req.body;
+
   // Validate items and calculate total
   let calculatedTotal = 0;
   const validatedItems = await Promise.all(items.map(async (item) => {
@@ -27,11 +32,11 @@ export const createSale = asyncHandler(async (req, res) => {
     };
   }));
 
-  // // Verify total amount
-  // if (Math.abs(calculatedTotal - totalAmount) > 0.01) {
-  //   res.status(400);
-  //   throw new Error('Total amount mismatch');
-  // }
+  // Create bill photo object if photo was uploaded
+  const billPhoto = req.file ? {
+    data: req.file.buffer,
+    contentType: req.file.mimetype
+  } : null;
 
   const sale = await Sale.create({
     store: req.user.store,
@@ -39,7 +44,8 @@ export const createSale = asyncHandler(async (req, res) => {
     customerName,
     items: validatedItems,
     totalAmount: calculatedTotal,
-    billPhoto
+    billPhoto,
+    salesmanName: salesman
   });
 
   const populatedSale = await Sale.findById(sale._id)
@@ -47,7 +53,16 @@ export const createSale = asyncHandler(async (req, res) => {
     .populate('salesperson', 'name')
     .populate('items.product', 'name itemCode');
 
-  res.status(201).json(populatedSale);
+  // Don't send the binary data of the photo in the response
+  const saleResponse = populatedSale.toObject();
+  if (saleResponse.billPhoto) {
+    saleResponse.billPhoto = {
+      contentType: saleResponse.billPhoto.contentType,
+      exists: true
+    };
+  }
+
+  res.status(201).json(saleResponse);
 });
 
 // @desc    Get all sales for a store

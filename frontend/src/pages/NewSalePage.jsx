@@ -323,17 +323,39 @@ useEffect(() => {
         price: item.price
       }));
 
-      // Create basic payload
-      const salePayload = {
-        customerName: saleData.customerName || '',
-        items: cleanedItems,  // Send as array, not string
-        totalAmount: calculateTotal(),
-        store: saleData.storeId
-      };
-
-      // Use axios directly to ensure proper content type
-      const response = await createSale(salePayload);
+      const formData = new FormData();
+      const user = JSON.parse(localStorage.getItem('user'));
       
+      // Debug logging
+      console.log("Current saleData:", saleData);
+      console.log("Cleaned Items:", cleanedItems);
+
+      // Be explicit with the values and add some validation
+      const customerName = saleData.customerName || '';
+      const totalAmount = calculateTotal();
+      const storeId = saleData.storeId;
+      const salesmanName = user?.name || '';
+
+      // Append with validation
+      formData.append('customerName', customerName);
+      formData.append('items', JSON.stringify(cleanedItems));
+      formData.append('totalAmount', totalAmount);
+      formData.append('store', storeId);
+      formData.append('salesman', salesmanName);
+
+      // Add bill photo if exists
+      if (saleData.billPhoto) {
+        formData.append('billPhoto', saleData.billPhoto);
+      }
+
+      // Debug: Log FormData contents
+      console.log("FormData contents:");
+      for (let pair of formData.entries()) {
+        console.log(pair[0], pair[1]);
+      }
+
+      const response = await createSale(formData);
+
       setSuccess('Sale recorded successfully!');
       setSaleData({
         storeId: '',

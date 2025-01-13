@@ -14,22 +14,16 @@ export const createSale = async (saleData) => {
   // If there is a billPhoto, use FormData
   const formData = new FormData();
   
-  // Append each field separately to FormData to maintain proper data types
-  if (saleData.customerName !== undefined) {
-    formData.append('customerName', saleData.customerName);
-  }
-  if (saleData.store) {
-    formData.append('store', saleData.store);
-  }
-  if (saleData.items) {
-    formData.append('items', JSON.stringify(saleData.items));
-  }
-  if (saleData.totalAmount) {
-    formData.append('totalAmount', saleData.totalAmount);
-  }
-  if (saleData.billPhoto) {
-    formData.append('billPhoto', saleData.billPhoto);
-  }
+  // Append all data fields to FormData
+  Object.keys(saleData).forEach(key => {
+    if (key === 'items') {
+      formData.append(key, JSON.stringify(saleData[key]));
+    } else if (key === 'billPhoto') {
+      formData.append(key, saleData[key]);
+    } else if (saleData[key] !== undefined && saleData[key] !== null) {
+      formData.append(key, saleData[key]);
+    }
+  });
 
   const { data } = await api.post('/sales', formData, {
     headers: {
@@ -45,8 +39,15 @@ export const getSales = async (params) => {
 };
 
 export const getSaleById = async (id) => {
-  const { data } = await api.get(`/sales/${id}`);
-  return data;
+  try {
+    console.log("Making API request for sale:", id);
+    const { data } = await api.get(`/sales/${id}`);
+    console.log("API response:", data);
+    return data;
+  } catch (error) {
+    console.error("API error:", error);
+    throw error;
+  }
 };
 
 export const getSalesStats = async (params) => {
