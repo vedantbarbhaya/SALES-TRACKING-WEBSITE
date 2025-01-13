@@ -122,5 +122,5 @@ This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md
 [Eashwar Madhavan Perumal](mailto:eashwarmp1012@gmail.com)
 [Vedant Barhbhaya](mailto:barbhayavedant@gmail.com)
 
-Project Link: [https://github.com/yourusername/sales-tracking-system](https://github.com/yourusername/sales-tracking-system)
+Project Link: [https://github.com/EdgerunnersAI/SALES-TRACKING-WEBSITE](https://github.com/EdgerunnersAI/SALES-TRACKING-WEBSITE)
 
