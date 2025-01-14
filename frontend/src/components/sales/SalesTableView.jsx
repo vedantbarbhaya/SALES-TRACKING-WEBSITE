@@ -15,15 +15,103 @@ import {
   Box,
   Typography,
   Alert,
-  CircularProgress
+  CircularProgress,
+  Collapse,
+  IconButton,
+  Chip
 } from '@mui/material';
+import {
+  KeyboardArrowDown as KeyboardArrowDownIcon,
+  KeyboardArrowUp as KeyboardArrowUpIcon
+} from '@mui/icons-material';
 import { getSales } from '@/services/sales';
 import { getStores } from '@/services/stores';
 import { handleApiError } from '@/utils/errorHandler';
 
+// Row component to handle expandable details
+const SaleRow = ({ sale }) => {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <TableRow sx={{ '& > *': { borderBottom: 'unset' } }}>
+        <TableCell>
+          <IconButton
+            aria-label="expand row"
+            size="small"
+            onClick={() => setOpen(!open)}
+          >
+            {open ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+          </IconButton>
+        </TableCell>
+        <TableCell>{sale.saleNumber}</TableCell>
+        <TableCell>{new Date(sale.createdAt).toLocaleString()}</TableCell>
+        <TableCell>{sale.store?.name}</TableCell>
+        <TableCell>{sale.salesperson?.name}</TableCell>
+        <TableCell>{sale.customerName || 'N/A'}</TableCell>
+        <TableCell>${sale.totalAmount.toFixed(2)}</TableCell>
+        <TableCell>
+          <Chip
+            label={sale.status}
+            color={
+              sale.status === 'completed' ? 'success' :
+              sale.status === 'cancelled' ? 'error' :
+              'default'
+            }
+            size="small"
+          />
+        </TableCell>
+      </TableRow>
+      <TableRow>
+        <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={8}>
+          <Collapse in={open} timeout="auto" unmountOnExit>
+            <Box sx={{ margin: 1 }}>
+              <Typography variant="h6" gutterBottom component="div">
+                Products
+              </Typography>
+              <Table size="small">
+                <TableHead>
+                    <TableRow>
+                    <TableCell>Product Code</TableCell>
+                    <TableCell>Name</TableCell>
+                    <TableCell align="right">Quantity</TableCell>
+                    <TableCell align="right">Price</TableCell>
+                    <TableCell align="right">Total</TableCell>
+                    </TableRow>
+                </TableHead>
+                <TableBody>
+                    {sale.items.map((item) => (
+                    <TableRow key={item._id}>
+                        <TableCell>{item.product?.itemCode}</TableCell>
+                        <TableCell>{item.product?.name}</TableCell>
+                        <TableCell align="right">{item.quantity}</TableCell>
+                        {/* Use the price stored in the sale item */}
+                        <TableCell align="right">${Number(item.price).toFixed(2)}</TableCell>
+                        {/* Calculate total based on the sale item price */}
+                        <TableCell align="right">${(item.price * item.quantity).toFixed(2)}</TableCell>
+                    </TableRow>
+                    ))}
+                    <TableRow>
+                    <TableCell colSpan={4} align="right" sx={{ fontWeight: 'bold' }}>
+                        Total Amount:
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                        ${sale.totalAmount.toFixed(2)}
+                    </TableCell>
+                    </TableRow>
+                </TableBody>
+                </Table>
+            </Box>
+          </Collapse>
+        </TableCell>
+      </TableRow>
+    </>
+  );
+};
+
 const SalesTableView = () => {
   // States
-  const [selectedStore, setSelectedStore] = useState('');
+  const [selectedStore, setSelectedStore] = useState('all'); // Changed default to 'all'
   const [timeRange, setTimeRange] = useState('7days');
   const [salesData, setSalesData] = useState([]);
   const [page, setPage] = useState(0);
@@ -49,8 +137,6 @@ const SalesTableView = () => {
   // Fetch sales data when store, time range, or pagination changes
   useEffect(() => {
     const fetchSalesData = async () => {
-      if (!selectedStore) return;
-
       try {
         setLoading(true);
         const response = await getSales({
@@ -105,6 +191,7 @@ const SalesTableView = () => {
             label="Store"
             onChange={handleStoreChange}
           >
+            <MenuItem value="all">All Stores</MenuItem>
             {stores.map((store) => (
               <MenuItem key={store._id} value={store._id}>
                 {store.name}
@@ -139,61 +226,32 @@ const SalesTableView = () => {
         </Box>
       ) : (
         <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Date</TableCell>
-                <TableCell>Customer</TableCell>
-                <TableCell>Items</TableCell>
-                <TableCell>Total Amount</TableCell>
-                <TableCell>Salesperson</TableCell>
-                <TableCell>Status</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {salesData.map((sale) => (
-                <TableRow key={sale._id}>
-                  <TableCell>
-                    {new Date(sale.createdAt).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell>{sale.customerName || 'N/A'}</TableCell>
-                  <TableCell>{sale.items.length}</TableCell>
-                  <TableCell>${sale.totalAmount.toFixed(2)}</TableCell>
-                  <TableCell>{sale.salesperson?.name}</TableCell>
-                  <TableCell>
-                    <Box
-                      component="span"
-                      sx={{
-                        px: 2,
-                        py: 0.5,
-                        borderRadius: 1,
-                        fontSize: '0.875rem',
-                        bgcolor: 
-                          sale.status === 'completed' ? 'success.50' :
-                          sale.status === 'cancelled' ? 'error.50' :
-                          'grey.100',
-                        color:
-                          sale.status === 'completed' ? 'success.700' :
-                          sale.status === 'cancelled' ? 'error.700' :
-                          'grey.700'
-                      }}
-                    >
-                      {sale.status}
-                    </Box>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {salesData.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
-                    <Typography color="text.secondary">
-                      No sales data available
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+        <Table>
+        <TableHead>
+            <TableRow>
+            <TableCell />  {/* For expand/collapse */}
+            <TableCell>Sale Number</TableCell>
+            <TableCell>Date & Time</TableCell>
+            <TableCell>Store</TableCell>
+            <TableCell>Salesperson</TableCell>
+            <TableCell>Customer</TableCell>
+            <TableCell>Total Amount</TableCell>
+            <TableCell>Status</TableCell>
+            </TableRow>
+        </TableHead>
+        <TableBody>
+            {salesData.map((sale) => (
+            <SaleRow key={sale._id} sale={sale} />
+            ))}
+            {salesData.length === 0 && (
+            <TableRow>
+                <TableCell colSpan={8} align="center">
+                <Typography color="text.secondary">No sales data available</Typography>
+                </TableCell>
+            </TableRow>
+            )}
+        </TableBody>
+        </Table>
           <TablePagination
             component="div"
             count={totalRows}

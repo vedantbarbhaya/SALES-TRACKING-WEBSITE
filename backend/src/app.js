@@ -13,6 +13,7 @@ import authRoutes from './routes/auth.js';
 import salesRoutes from './routes/sales.js';
 import productRoutes from './routes/products.js';
 import storeRoutes from './routes/stores.js';
+import uploadRoutes from './routes/upload.js';
 
 // ES modules fix for __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -39,7 +40,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/sales', salesRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/stores', storeRoutes);
-
+app.use('/api/upload', uploadRoutes);
 
 // Error Handler
 app.use(errorHandler);

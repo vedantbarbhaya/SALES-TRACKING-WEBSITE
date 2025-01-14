@@ -44,49 +44,46 @@ const DashboardOverview = () => {
   // Fetch dashboard data when store or period changes
   useEffect(() => {
     const fetchDashboardData = async () => {
-      try {
-        setLoading(true);
-        setError('');
-        
-        const endDate = new Date();
-        const startDate = new Date();
-
-        switch(period) {
-          case 'week':
-            startDate.setDate(startDate.getDate() - 7);
-            break;
-          case 'month':
-            startDate.setDate(startDate.getDate() - 30);
-            break;
-          case 'year':
-            startDate.setFullYear(startDate.getFullYear() - 1);
-            break;
-          default:
-            startDate.setDate(startDate.getDate() - 7);
+        try {
+          setLoading(true);
+          setError('');
+          
+          const endDate = new Date();
+          const startDate = new Date();
+      
+          switch(period) {
+            case 'week':
+              startDate.setDate(startDate.getDate() - 7);
+              break;
+            case 'month':
+              startDate.setDate(startDate.getDate() - 30);
+              break;
+            case 'year':
+              startDate.setFullYear(startDate.getFullYear() - 1);
+              break;
+            default:
+              startDate.setDate(startDate.getDate() - 7);
+          }
+      
+          const params = {
+            startDate: startDate.toISOString(),
+            endDate: endDate.toISOString(),
+            storeId: selectedStore  // Always send the storeId parameter, even when it's 'all'
+          };
+      
+          const [statsResponse, salesResponse] = await Promise.all([
+            getSalesStats(params),
+            getDailySales(params)
+          ]);
+      
+          setStats(statsResponse);
+          setSalesData(salesResponse.dailySales); // Notice the .dailySales here
+        } catch (err) {
+          setError(handleApiError(err));
+        } finally {
+          setLoading(false);
         }
-
-        const params = {
-          startDate: startDate.toISOString(),
-          endDate: endDate.toISOString()
-        };
-
-        if (selectedStore !== 'all') {
-          params.storeId = selectedStore;
-        }
-
-        const [statsResponse, salesResponse] = await Promise.all([
-          getSalesStats(params),
-          getDailySales(params)
-        ]);
-
-        setStats(statsResponse);
-        setSalesData(salesResponse);
-      } catch (err) {
-        setError(handleApiError(err));
-      } finally {
-        setLoading(false);
-      }
-    };
+      };
 
     fetchDashboardData();
   }, [selectedStore, period]);
