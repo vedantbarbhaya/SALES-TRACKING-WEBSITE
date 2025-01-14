@@ -18,7 +18,8 @@ import {
   Delete as DeleteIcon,
   Save as SaveIcon,
   Search as SearchIcon,
-  QrCodeScanner as ScanIcon
+  QrCodeScanner as ScanIcon,
+  CheckCircle as CheckCircleIcon
 } from '@mui/icons-material';
 import ProductSearch from '@/components/sales/ProductSearch';
 import { useAuth } from '@/hooks/useAuth';
@@ -286,13 +287,41 @@ useEffect(() => {
   const handlePhotoCapture = (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setError('Photo size should be less than 5MB');
-        return;
+      try {
+        // Check file size
+        if (file.size > 5 * 1024 * 1024) {
+          setError('Photo size should be less than 5MB');
+          return;
+        }
+  
+        // Check file type
+        if (!file.type.startsWith('image/')) {
+          setError('Please upload an image file');
+          return;
+        }
+  
+        // Update state
+        setSaleData(prev => ({
+          ...prev,
+          billPhoto: file
+        }));
+        
+        // Clear any existing errors
+        setError('');
+        
+      } catch (err) {
+        console.error('Error handling photo:', err);
+        setError('Failed to process photo');
+        setSaleData(prev => ({
+          ...prev,
+          billPhoto: null
+        }));
       }
+    } else {
+      // Reset photo if no file selected
       setSaleData(prev => ({
         ...prev,
-        billPhoto: file
+        billPhoto: null
       }));
     }
   };
@@ -343,8 +372,10 @@ useEffect(() => {
       formData.append('store', storeId);
       formData.append('salesman', salesmanName);
 
+      
       // Add bill photo if exists
       if (saleData.billPhoto) {
+        console.log(saleData.billPhoto)
         formData.append('billPhoto', saleData.billPhoto);
       }
 

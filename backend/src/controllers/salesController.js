@@ -38,6 +38,7 @@ export const createSale = asyncHandler(async (req, res) => {
     contentType: req.file.mimetype
   } : null;
 
+  console.log(billPhoto)
   const sale = await Sale.create({
     store: req.user.store,
     salesperson: req.user._id,
@@ -47,12 +48,12 @@ export const createSale = asyncHandler(async (req, res) => {
     billPhoto,
     salesmanName: salesman
   });
-
+  
   const populatedSale = await Sale.findById(sale._id)
     .populate('store')
     .populate('salesperson', 'name')
     .populate('items.product', 'name itemCode')
-    select('-billPhoto.data'); 
+    .select('billPhoto.data'); 
     
   // Don't send the binary data of the photo in the response
   const saleResponse = populatedSale.toObject();

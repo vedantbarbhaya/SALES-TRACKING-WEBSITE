@@ -1,7 +1,17 @@
 import api from './api';
 
 export const createSale = async (saleData) => {
-  // If there's no billPhoto, send as JSON
+  // Handle FormData case (when saleData is already FormData)
+  if (saleData instanceof FormData) {
+    const { data } = await api.post('/sales', saleData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    return data;
+  }
+
+  // Handle JSON case (when no billPhoto)
   if (!saleData.billPhoto) {
     const { data } = await api.post('/sales', saleData, {
       headers: {
@@ -11,19 +21,20 @@ export const createSale = async (saleData) => {
     return data;
   }
 
-  // If there is a billPhoto, use FormData
+  // Handle object with billPhoto case
   const formData = new FormData();
   
-  // Append all data fields to FormData
-  Object.keys(saleData).forEach(key => {
-    if (key === 'items') {
-      formData.append(key, JSON.stringify(saleData[key]));
-    } else if (key === 'billPhoto') {
-      formData.append(key, saleData[key]);
-    } else if (saleData[key] !== undefined && saleData[key] !== null) {
-      formData.append(key, saleData[key]);
+  // Append fields correctly
+  for (let pair of saleData.entries()) {
+    if (pair[0] === 'items') {
+      // items is already stringified in your form data
+      formData.append('items', pair[1]);
+    } else if (pair[0] === 'billPhoto') {
+      formData.append('billPhoto', pair[1], pair[1].name);
+    } else {
+      formData.append(pair[0], pair[1]);
     }
-  });
+  }
 
   const { data } = await api.post('/sales', formData, {
     headers: {
