@@ -1,6 +1,21 @@
 import asyncHandler from 'express-async-handler';
 import Sale from '../models/Sale.js';
 import Product from '../models/Product.js';
+import mongoose from 'mongoose';
+
+const getStoreFilter = (storeId, user) => {
+  // For admin users selecting 'all'
+  if (storeId === 'all' && user.role === 'admin') {
+    return { $exists: true };
+  }
+  
+  // For specific store selections
+  if (storeId === 'all') {
+    return new mongoose.Types.ObjectId(user.store);
+  }
+  
+  return new mongoose.Types.ObjectId(storeId);
+};
 
 // @desc    Create new sale
 // @route   POST /api/sales
@@ -21,13 +36,13 @@ export const createSale = asyncHandler(async (req, res) => {
       throw new Error(`Product not found: ${item.product}`);
     }
     
-    const total = Number(product.price) * Number(item.quantity);
+    const total = Number(item.price) * Number(item.quantity);
     calculatedTotal += total;
 
     return {
       product: product._id,
       quantity: item.quantity,
-      price: product.price,
+      price: item.price, // Taking from the form value
       total
     };
   }));
@@ -40,7 +55,7 @@ export const createSale = asyncHandler(async (req, res) => {
 
   console.log(billPhoto)
   const sale = await Sale.create({
-    store: req.user.store,
+    store: req.body.store,
     salesperson: req.user._id,
     customerName,
     items: validatedItems,
@@ -48,7 +63,7 @@ export const createSale = asyncHandler(async (req, res) => {
     billPhoto,
     salesmanName: salesman
   });
-  
+
   const populatedSale = await Sale.findById(sale._id)
     .populate('store')
     .populate('salesperson', 'name')
@@ -67,27 +82,52 @@ export const createSale = asyncHandler(async (req, res) => {
   res.status(201).json(saleResponse);
 });
 
+
 // @desc    Get all sales for a store
 // @route   GET /api/sales
 // @access  Private
 export const getSales = asyncHandler(async (req, res) => {
   const pageSize = 10;
   const page = Number(req.query.page) || 1;
+  const storeId = req.query.storeId || req.user.store;
+  const timeRange = req.query.timeRange || '7days';
   
-  const filter = { store: req.user.store };
+  // Check permission
+  if (storeId !== 'all' && storeId !== req.user.store.toString() && req.user.role !== 'admin') {
+    res.status(403);
+    throw new Error('Not authorized to view this store\'s data');
+  }
+
+  // Create store filter
+  const storeFilter = getStoreFilter(storeId, req.user);
+  const filter = { store: storeFilter };
   
-  // Add date range filter if provided
-  if (req.query.startDate && req.query.endDate) {
-    filter.createdAt = {
-      $gte: new Date(req.query.startDate),
-      $lte: new Date(req.query.endDate)
-    };
+  // Add time range filter
+  const currentDate = new Date();
+  switch(timeRange) {
+    case '7days':
+      filter.createdAt = {
+        $gte: new Date(currentDate.setDate(currentDate.getDate() - 7))
+      };
+      break;
+    case '30days':
+      filter.createdAt = {
+        $gte: new Date(currentDate.setDate(currentDate.getDate() - 30))
+      };
+      break;
+    case 'all':
+      // No date filter needed
+      break;
+    default:
+      filter.createdAt = {
+        $gte: new Date(currentDate.setDate(currentDate.getDate() - 7))
+      };
   }
 
   const count = await Sale.countDocuments(filter);
   
   const sales = await Sale.find(filter)
-    .populate('store')
+    .populate('store', 'name')
     .populate('salesperson', 'name')
     .populate('items.product', 'name itemCode')
     .sort({ createdAt: -1 })
@@ -101,6 +141,109 @@ export const getSales = asyncHandler(async (req, res) => {
     total: count
   });
 });
+
+// @desc    Get all sales for a store
+// @route   GET /api/sales
+// @access  Private
+// In salesController.js, modify getSales function:
+
+// In getSalesStats function:
+export const getSalesStats = asyncHandler(async (req, res) => {
+  const startDate = req.query.startDate 
+    ? new Date(req.query.startDate)
+    : new Date(new Date().setHours(0, 0, 0, 0));
+  
+  const endDate = req.query.endDate
+    ? new Date(req.query.endDate)
+    : new Date(new Date().setHours(23, 59, 59, 999));
+
+  const storeId = req.query.storeId || req.user.store;
+
+  // Check permission
+  if (storeId !== 'all' && storeId !== req.user.store.toString() && req.user.role !== 'admin') {
+    res.status(403);
+    throw new Error('Not authorized to view this store\'s data');
+  }
+
+  // Create store filter
+  const storeFilter = getStoreFilter(storeId, req.user);
+
+  const stats = await Sale.aggregate([
+    {
+      $match: {
+        store: storeFilter,
+        createdAt: { $gte: startDate, $lte: endDate },
+        status: 'completed'
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        totalSales: { $sum: 1 },
+        totalAmount: { $sum: '$totalAmount' },
+        averageAmount: { $avg: '$totalAmount' },
+        uniqueCustomers: { $addToSet: '$customerName' }
+      }
+    },
+    {
+      $project: {
+        _id: 0,
+        totalSales: 1,
+        totalAmount: { $round: ['$totalAmount', 2] },
+        averageAmount: { $round: ['$averageAmount', 2] },
+        uniqueCustomers: { $size: '$uniqueCustomers' }
+      }
+    }
+  ]);
+
+  const topProducts = await Sale.aggregate([
+    {
+      $match: {
+        store: storeFilter,
+        createdAt: { $gte: startDate, $lte: endDate },
+        status: 'completed'
+      }
+    },
+    { $unwind: '$items' },
+    {
+      $group: {
+        _id: '$items.product',
+        totalQuantity: { $sum: '$items.quantity' },
+        totalAmount: { $sum: '$items.total' }
+      }
+    },
+    {
+      $lookup: {
+        from: 'products',
+        localField: '_id',
+        foreignField: '_id',
+        as: 'product'
+      }
+    },
+    { $unwind: '$product' },
+    {
+      $project: {
+        name: '$product.name',
+        itemCode: '$product.itemCode',
+        totalQuantity: 1,
+        totalAmount: { $round: ['$totalAmount', 2] }
+      }
+    },
+    { $sort: { totalQuantity: -1 } },
+    { $limit: 5 }
+  ]);
+
+  res.json({
+    summary: stats[0] || {
+      totalSales: 0,
+      totalAmount: 0,
+      averageAmount: 0,
+      uniqueCustomers: 0
+    },
+    topProducts
+  });
+});
+
 
 // @desc    Get sale by ID
 // @route   GET /api/sales/:id
@@ -149,84 +292,6 @@ export const updateSaleStatus = asyncHandler(async (req, res) => {
     res.status(404);
     throw new Error('Sale not found');
   }
-});
-
-// @desc    Get sales statistics
-// @route   GET /api/sales/stats
-// @access  Private
-export const getSalesStats = asyncHandler(async (req, res) => {
-  const startDate = req.query.startDate 
-    ? new Date(req.query.startDate)
-    : new Date(new Date().setHours(0, 0, 0, 0));
-  
-  const endDate = req.query.endDate
-    ? new Date(req.query.endDate)
-    : new Date(new Date().setHours(23, 59, 59, 999));
-
-  const stats = await Sale.aggregate([
-    {
-      $match: {
-        store: req.user.store,
-        createdAt: { $gte: startDate, $lte: endDate },
-        status: 'completed'
-      }
-    },
-    {
-      $group: {
-        _id: null,
-        totalSales: { $sum: 1 },
-        totalAmount: { $sum: '$totalAmount' },
-        averageAmount: { $avg: '$totalAmount' }
-      }
-    }
-  ]);
-
-  // Get top selling products
-  const topProducts = await Sale.aggregate([
-    {
-      $match: {
-        store: req.user.store,
-        createdAt: { $gte: startDate, $lte: endDate },
-        status: 'completed'
-      }
-    },
-    { $unwind: '$items' },
-    {
-      $group: {
-        _id: '$items.product',
-        totalQuantity: { $sum: '$items.quantity' },
-        totalAmount: { $sum: '$items.total' }
-      }
-    },
-    {
-      $lookup: {
-        from: 'products',
-        localField: '_id',
-        foreignField: '_id',
-        as: 'product'
-      }
-    },
-    { $unwind: '$product' },
-    {
-      $project: {
-        name: '$product.name',
-        itemCode: '$product.itemCode',
-        totalQuantity: 1,
-        totalAmount: 1
-      }
-    },
-    { $sort: { totalQuantity: -1 } },
-    { $limit: 5 }
-  ]);
-
-  res.json({
-    summary: stats[0] || {
-      totalSales: 0,
-      totalAmount: 0,
-      averageAmount: 0
-    },
-    topProducts
-  });
 });
 
 // @desc    Cancel a sale
@@ -286,15 +351,26 @@ export const cancelSale = asyncHandler(async (req, res) => {
 // @desc    Get daily sales data
 // @route   GET /api/sales/daily
 // @access  Private
+
 export const getDailySales = asyncHandler(async (req, res) => {
-  // Parse date range from query parameters
   const startDate = req.query.startDate 
     ? new Date(req.query.startDate)
-    : new Date(new Date().setDate(new Date().getDate() - 7)); // Default to last 7 days
+    : new Date(new Date().setDate(new Date().getDate() - 7));
   
   const endDate = req.query.endDate
     ? new Date(req.query.endDate)
     : new Date();
+
+  const storeId = req.query.storeId || req.user.store;
+
+  // Check permission
+  if (storeId !== 'all' && storeId !== req.user.store.toString() && req.user.role !== 'admin') {
+    res.status(403);
+    throw new Error('Not authorized to view this store\'s data');
+  }
+
+  // Create store filter
+  const storeFilter = getStoreFilter(storeId, req.user);
 
   // Set time to start and end of days
   startDate.setHours(0, 0, 0, 0);
@@ -303,7 +379,7 @@ export const getDailySales = asyncHandler(async (req, res) => {
   const dailySales = await Sale.aggregate([
     {
       $match: {
-        store: req.user.store,
+        store: storeFilter,
         status: 'completed',
         createdAt: { 
           $gte: startDate,
@@ -320,8 +396,8 @@ export const getDailySales = asyncHandler(async (req, res) => {
           }
         },
         date: { $first: '$createdAt' },
+        amount: { $sum: '$totalAmount' },
         totalSales: { $sum: 1 },
-        totalAmount: { $sum: '$totalAmount' },
         averageAmount: { $avg: '$totalAmount' },
         items: { $sum: { $size: '$items' } }
       }
@@ -330,8 +406,8 @@ export const getDailySales = asyncHandler(async (req, res) => {
       $project: {
         _id: 0,
         date: '$_id',
+        amount: { $round: ['$amount', 2] },
         totalSales: 1,
-        totalAmount: { $round: ['$totalAmount', 2] },
         averageAmount: { $round: ['$averageAmount', 2] },
         totalItems: '$items'
       }
@@ -341,7 +417,7 @@ export const getDailySales = asyncHandler(async (req, res) => {
     }
   ]);
 
-  // Fill in missing dates with zero values
+  // Fill in missing dates
   const filledDailySales = [];
   const currentDate = new Date(startDate);
   const salesByDate = Object.fromEntries(
@@ -353,8 +429,8 @@ export const getDailySales = asyncHandler(async (req, res) => {
     filledDailySales.push(
       salesByDate[dateString] || {
         date: dateString,
+        amount: 0,
         totalSales: 0,
-        totalAmount: 0,
         averageAmount: 0,
         totalItems: 0
       }
@@ -362,10 +438,10 @@ export const getDailySales = asyncHandler(async (req, res) => {
     currentDate.setDate(currentDate.getDate() + 1);
   }
 
-  // Get additional statistics
+  // Calculate additional statistics
   const summary = {
     totalSales: dailySales.reduce((sum, day) => sum + day.totalSales, 0),
-    totalAmount: Number(dailySales.reduce((sum, day) => sum + day.totalAmount, 0).toFixed(2)),
+    totalAmount: Number(dailySales.reduce((sum, day) => sum + day.amount, 0).toFixed(2)),
     averageDailySales: Number((dailySales.reduce((sum, day) => sum + day.totalSales, 0) / 
       (filledDailySales.length || 1)).toFixed(2)),
     totalItems: dailySales.reduce((sum, day) => sum + day.totalItems, 0)
@@ -378,8 +454,8 @@ export const getDailySales = asyncHandler(async (req, res) => {
     
     summary.salesTrend = Number((((lastDay.totalSales - firstDay.totalSales) / 
       firstDay.totalSales) * 100).toFixed(2));
-    summary.amountTrend = Number((((lastDay.totalAmount - firstDay.totalAmount) / 
-      firstDay.totalAmount) * 100).toFixed(2));
+    summary.amountTrend = Number((((lastDay.amount - firstDay.amount) / 
+      firstDay.amount) * 100).toFixed(2));
   }
 
   res.json({
@@ -405,7 +481,7 @@ export const getMonthlyReport = asyncHandler(async (req, res) => {
   const monthlyData = await Sale.aggregate([
     {
       $match: {
-        store: req.user.store,
+        store: getStoreFilter(req.query.storeId || req.user.store, req.user),
         status: 'completed',
         createdAt: { $gte: startDate, $lte: endDate }
       }
@@ -495,7 +571,7 @@ export const getSalesByProduct = asyncHandler(async (req, res) => {
   const productSales = await Sale.aggregate([
     {
       $match: {
-        store: req.user.store,
+        store: getStoreFilter(req.query.storeId || req.user.store, req.user),
         status: 'completed',
         ...dateFilter
       }
@@ -562,7 +638,7 @@ export const getSalesBySalesperson = asyncHandler(async (req, res) => {
   const salesData = await Sale.aggregate([
     {
       $match: {
-        store: req.user.store,
+        store: getStoreFilter(req.query.storeId || req.user.store, req.user),
         status: 'completed',
         ...dateFilter
       }

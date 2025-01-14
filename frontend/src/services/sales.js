@@ -11,6 +11,7 @@ export const createSale = async (saleData) => {
     return data;
   }
 
+  
   // Handle JSON case (when no billPhoto)
   if (!saleData.billPhoto) {
     const { data } = await api.post('/sales', saleData, {

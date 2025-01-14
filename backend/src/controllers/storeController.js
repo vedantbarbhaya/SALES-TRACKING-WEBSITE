@@ -5,7 +5,21 @@ import Store from '../models/Store.js';
 // @route   GET /api/stores
 // @access  Private/Admin
 export const getStores = asyncHandler(async (req, res) => {
-  const stores = await Store.find({});
+  let stores;
+  
+   // If user is admin, they can see all stores
+   if (req.user.role === 'admin') {
+    stores = await Store.find({});
+  } else {
+    // Regular users can only see their assigned store
+    stores = await Store.find({ _id: req.user.store });
+  }
+
+  // Only return active stores unless user is admin
+  if (req.user.role !== 'admin') {
+    stores = stores.filter(store => store.isActive);
+  }
+
   res.status(200).json(stores);
 });
 
