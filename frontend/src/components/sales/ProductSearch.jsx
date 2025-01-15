@@ -47,6 +47,37 @@ const ProductSearch = ({ onProductSelect, onClose }) => {
     }
   };
 
+  const renderProductInfo = (product) => {
+    const details = [];
+    if (product.variantName) details.push(product.variantName);
+    if (product.department) details.push(product.department);
+    if (product.category) details.push(product.category);
+    if (product.subcategory) details.push(product.subcategory);
+
+    return (
+      <>
+        <div className="font-medium flex items-center gap-2">
+          <span>{product.name}</span>
+          {product.variantName && (
+            <span className="text-sm px-2 py-0.5 bg-gray-100 rounded">
+              {product.variantName}
+            </span>
+          )}
+        </div>
+        <div className="text-sm text-gray-500 flex flex-wrap gap-2">
+          <span>Code: {product.itemCode}</span>
+          <span>|</span>
+          <span>${product.price.toFixed(2)}</span>
+        </div>
+        {details.length > 0 && (
+          <div className="text-xs text-gray-500 mt-1">
+            {details.filter(d => d).join(' > ')}
+          </div>
+        )}
+      </>
+    );
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50">
       <div className="fixed inset-x-0 bottom-0 bg-white rounded-t-xl max-h-[80vh] overflow-y-auto">
@@ -68,7 +99,7 @@ const ProductSearch = ({ onProductSelect, onClose }) => {
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search products..."
+                placeholder="Search products by name, code, or category..."
                 className="w-full pl-10 pr-4 py-2.5 border rounded-lg"
               />
             </div>
@@ -103,10 +134,7 @@ const ProductSearch = ({ onProductSelect, onClose }) => {
                   }}
                   className="w-full p-3 text-left border rounded-lg hover:bg-gray-50"
                 >
-                  <div className="font-medium">{product.name}</div>
-                  <div className="text-sm text-gray-500">
-                    Code: {product.itemCode} | Price: ${product.price.toFixed(2)}
-                  </div>
+                  {renderProductInfo(product)}
                 </button>
               ))}
               {!loading && products.length === 0 && searchTerm.length > 2 && (

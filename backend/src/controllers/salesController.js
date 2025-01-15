@@ -87,59 +87,83 @@ export const createSale = asyncHandler(async (req, res) => {
 // @route   GET /api/sales
 // @access  Private
 export const getSales = asyncHandler(async (req, res) => {
+  console.log('GetSales called with query:', req.query);
+  console.log('User:', req.user);
+
   const pageSize = 10;
   const page = Number(req.query.page) || 1;
-  const storeId = req.query.storeId || req.user.store;
-  const timeRange = req.query.timeRange || '7days';
+
+  // For debugging, first get all sales
+  const allSales = await Sale.find({});
+  console.log('Total sales in database (unfiltered):', allSales.length);
   
-  // Check permission
-  if (storeId !== 'all' && storeId !== req.user.store.toString() && req.user.role !== 'admin') {
-    res.status(403);
-    throw new Error('Not authorized to view this store\'s data');
+  // Build filter object
+  const filter = {};
+
+  // Handle store filtering based on user role
+  if (req.user.role === 'admin') {
+    // Admin can see all stores unless specific store requested
+    if (req.query.storeId && req.query.storeId !== 'all') {
+      filter.store = new mongoose.Types.ObjectId(req.query.storeId);
+    }
+  } else {
+    // Non-admin users can only see their store's sales
+    filter.store = new mongoose.Types.ObjectId(req.user.store);
   }
 
-  // Create store filter
-  const storeFilter = getStoreFilter(storeId, req.user);
-  const filter = { store: storeFilter };
-  
-  // Add time range filter
-  const currentDate = new Date();
-  switch(timeRange) {
-    case '7days':
-      filter.createdAt = {
-        $gte: new Date(currentDate.setDate(currentDate.getDate() - 7))
-      };
-      break;
-    case '30days':
-      filter.createdAt = {
-        $gte: new Date(currentDate.setDate(currentDate.getDate() - 30))
-      };
-      break;
-    case 'all':
-      // No date filter needed
-      break;
-    default:
-      filter.createdAt = {
-        $gte: new Date(currentDate.setDate(currentDate.getDate() - 7))
-      };
+  // Add date filters if provided
+  if (req.query.startDate) {
+    filter.createdAt = { $gte: new Date(req.query.startDate) };
+  }
+  if (req.query.endDate) {
+    if (!filter.createdAt) filter.createdAt = {};
+    filter.createdAt.$lte = new Date(req.query.endDate);
   }
 
-  const count = await Sale.countDocuments(filter);
-  
-  const sales = await Sale.find(filter)
-    .populate('store', 'name')
-    .populate('salesperson', 'name')
-    .populate('items.product', 'name itemCode')
-    .sort({ createdAt: -1 })
-    .skip(pageSize * (page - 1))
-    .limit(pageSize);
+  // Add search filter if provided
+  if (req.query.search) {
+    filter.$or = [
+      { saleNumber: { $regex: req.query.search, $options: 'i' } },
+      { customerName: { $regex: req.query.search, $options: 'i' } }
+    ];
+  }
 
-  res.json({
-    sales,
-    page,
-    pages: Math.ceil(count / pageSize),
-    total: count
-  });
+  console.log('Applied filter:', JSON.stringify(filter, null, 2));
+
+  try {
+    // Get count of filtered results
+    const count = await Sale.countDocuments(filter);
+    console.log('Count after applying filter:', count);
+
+    // Get paginated sales with population
+    const sales = await Sale.find(filter)
+      .populate('store', 'name')
+      .populate('salesperson', 'name')
+      .populate({
+        path: 'items.product',
+        select: 'name itemCode variantName department category subcategory'
+      })
+      .sort({ createdAt: -1 })
+      .skip(pageSize * (page - 1))
+      .limit(pageSize);
+
+    console.log('Number of sales found after pagination:', sales.length);
+    
+    // Log a sample sale for debugging (first sale if exists)
+    if (sales.length > 0) {
+      console.log('Sample sale data:', JSON.stringify(sales[0], null, 2));
+    }
+
+    res.json({
+      sales,
+      page,
+      pages: Math.ceil(count / pageSize),
+      total: count
+    });
+  } catch (error) {
+    console.error('Error in getSales:', error);
+    throw error;
+  }
 });
 
 // @desc    Get all sales for a store
@@ -158,24 +182,18 @@ export const getSalesStats = asyncHandler(async (req, res) => {
     : new Date(new Date().setHours(23, 59, 59, 999));
 
   const storeId = req.query.storeId || req.user.store;
-
-  // Check permission
-  if (storeId !== 'all' && storeId !== req.user.store.toString() && req.user.role !== 'admin') {
-    res.status(403);
-    throw new Error('Not authorized to view this store\'s data');
-  }
-
-  // Create store filter
   const storeFilter = getStoreFilter(storeId, req.user);
 
+  // Base match condition for all aggregations
+  const baseMatch = {
+    store: storeFilter,
+    createdAt: { $gte: startDate, $lte: endDate },
+    status: 'completed'
+  };
+
+  // Get overall stats
   const stats = await Sale.aggregate([
-    {
-      $match: {
-        store: storeFilter,
-        createdAt: { $gte: startDate, $lte: endDate },
-        status: 'completed'
-      }
-    },
+    { $match: baseMatch },
     {
       $group: {
         _id: null,
@@ -195,6 +213,68 @@ export const getSalesStats = asyncHandler(async (req, res) => {
       }
     }
   ]);
+
+  // Get department sales
+  const departmentSales = await Sale.aggregate([
+      { $match: baseMatch },
+      { $unwind: '$items' },
+      {
+        $lookup: {
+          from: 'products',
+          localField: 'items.product',
+          foreignField: '_id',
+          as: 'productInfo'
+        }
+      },
+      { $unwind: '$productInfo' },
+      {
+        $group: {
+          _id: '$productInfo.department',
+          totalAmount: { $sum: { $multiply: ['$items.quantity', '$items.price'] } },
+          totalQuantity: { $sum: '$items.quantity' }
+        }
+      },
+      {
+        $project: {
+          department: '$_id',
+          totalAmount: { $round: ['$totalAmount', 2] },
+          totalQuantity: 1,
+          _id: 0
+        }
+      },
+      { $sort: { totalAmount: -1 } }
+    ]);
+
+    // Get category sales
+    const categorySales = await Sale.aggregate([
+      { $match: baseMatch },
+      { $unwind: '$items' },
+      {
+        $lookup: {
+          from: 'products',
+          localField: 'items.product',
+          foreignField: '_id',
+          as: 'productInfo'
+        }
+      },
+      { $unwind: '$productInfo' },
+      {
+        $group: {
+          _id: '$productInfo.category',
+          totalAmount: { $sum: { $multiply: ['$items.quantity', '$items.price'] } },
+          totalQuantity: { $sum: '$items.quantity' }
+        }
+      },
+      {
+        $project: {
+          category: '$_id',
+          totalAmount: { $round: ['$totalAmount', 2] },
+          totalQuantity: 1,
+          _id: 0
+        }
+      },
+      { $sort: { totalAmount: -1 } }
+    ]);
 
   const topProducts = await Sale.aggregate([
     {
@@ -225,6 +305,10 @@ export const getSalesStats = asyncHandler(async (req, res) => {
       $project: {
         name: '$product.name',
         itemCode: '$product.itemCode',
+        variantName: '$product.variantName',    // New
+        department: '$product.department',       // New
+        category: '$product.category',
+        subcategory: '$product.subcategory',    // New
         totalQuantity: 1,
         totalAmount: { $round: ['$totalAmount', 2] }
       }
@@ -233,13 +317,15 @@ export const getSalesStats = asyncHandler(async (req, res) => {
     { $limit: 5 }
   ]);
 
-  res.json({
+   res.json({
     summary: stats[0] || {
       totalSales: 0,
       totalAmount: 0,
       averageAmount: 0,
       uniqueCustomers: 0
     },
+    departmentSales,
+    categorySales,
     topProducts
   });
 });
@@ -252,7 +338,7 @@ export const getSaleById = asyncHandler(async (req, res) => {
   const sale = await Sale.findById(req.params.id)
     .populate('store')
     .populate('salesperson', 'name')
-    .populate('items.product', 'name itemCode');
+    .populate('items.product', 'name itemCode variantName department category subcategory');
 
   if (sale) {
     // Verify user has access to this sale
@@ -338,12 +424,12 @@ export const cancelSale = asyncHandler(async (req, res) => {
 
   const updatedSale = await sale.save();
 
-  // Populate necessary fields
+  // Populate necessary fields with new product fields included
   const populatedSale = await Sale.findById(updatedSale._id)
     .populate('store')
     .populate('salesperson', 'name')
     .populate('cancelledBy', 'name')
-    .populate('items.product', 'name itemCode');
+    .populate('items.product', 'name itemCode variantName department category subcategory');
 
   res.json(populatedSale);
 });
@@ -527,17 +613,27 @@ export const getMonthlyReport = asyncHandler(async (req, res) => {
     { $unwind: '$productInfo' },
     {
       $group: {
-        _id: '$productInfo.category',
+        _id: {
+          department: '$productInfo.department',
+          category: '$productInfo.category',
+          subcategory: '$productInfo.subcategory'
+        },
         totalSales: { $sum: '$items.quantity' },
         totalAmount: { $sum: '$items.total' }
       }
     },
     {
       $project: {
-        category: '$_id',
+        _id: 0,
+        department: '$_id.department',
+        category: '$_id.category',
+        subcategory: '$_id.subcategory',
         totalSales: 1,
         totalAmount: { $round: ['$totalAmount', 2] }
       }
+    },
+    {
+      $sort: { totalAmount: -1 }
     }
   ]);
 
@@ -600,7 +696,10 @@ export const getSalesByProduct = asyncHandler(async (req, res) => {
         productId: '$_id',
         name: '$product.name',
         itemCode: '$product.itemCode',
+        variantName: '$product.variantName',    
+        department: '$product.department',      
         category: '$product.category',
+        subcategory: '$product.subcategory',    
         totalQuantity: 1,
         totalAmount: { $round: ['$totalAmount', 2] },
         salesCount: 1,

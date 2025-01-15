@@ -20,26 +20,130 @@ const seedData = {
     }
   ],
   products: [
+    // Smartphones
     {
-      itemCode: 'P001',
-      name: 'Product 1',
-      description: 'Description for product 1',
-      price: 29.99,
-      category: 'Category 1'
+      itemCode: 'SM001',
+      name: 'Galaxy S23',
+      variantName: '128GB',
+      description: 'Samsung Galaxy S23 Smartphone',
+      price: 799.99,
+      department: 'Electronics',
+      category: 'Smartphones',
+      subcategory: 'Android'
     },
     {
-      itemCode: 'P002',
-      name: 'Product 2',
-      description: 'Description for product 2',
-      price: 39.99,
-      category: 'Category 1'
+      itemCode: 'SM002',
+      name: 'Galaxy S23',
+      variantName: '256GB',
+      description: 'Samsung Galaxy S23 Smartphone',
+      price: 899.99,
+      department: 'Electronics',
+      category: 'Smartphones',
+      subcategory: 'Android'
     },
     {
-      itemCode: 'P003',
-      name: 'Product 3',
-      description: 'Description for product 3',
-      price: 49.99,
-      category: 'Category 2'
+      itemCode: 'SM003',
+      name: 'iPhone 15',
+      variantName: '128GB',
+      description: 'Apple iPhone 15',
+      price: 899.99,
+      department: 'Electronics',
+      category: 'Smartphones',
+      subcategory: 'iOS'
+    },
+    {
+      itemCode: 'SM004',
+      name: 'iPhone 15',
+      variantName: '256GB',
+      description: 'Apple iPhone 15',
+      price: 999.99,
+      department: 'Electronics',
+      category: 'Smartphones',
+      subcategory: 'iOS'
+    },
+
+    // Laptops
+    {
+      itemCode: 'LP001',
+      name: 'MacBook Air',
+      variantName: '256GB',
+      description: 'Apple MacBook Air with M2 chip',
+      price: 999.99,
+      department: 'Electronics',
+      category: 'Laptops',
+      subcategory: 'MacBook'
+    },
+    {
+      itemCode: 'LP002',
+      name: 'MacBook Air',
+      variantName: '512GB',
+      description: 'Apple MacBook Air with M2 chip',
+      price: 1199.99,
+      department: 'Electronics',
+      category: 'Laptops',
+      subcategory: 'MacBook'
+    },
+    {
+      itemCode: 'LP003',
+      name: 'XPS 13',
+      variantName: 'i5/8GB',
+      description: 'Dell XPS 13 Laptop',
+      price: 899.99,
+      department: 'Electronics',
+      category: 'Laptops',
+      subcategory: 'Windows'
+    },
+    {
+      itemCode: 'LP004',
+      name: 'XPS 13',
+      variantName: 'i7/16GB',
+      description: 'Dell XPS 13 Laptop',
+      price: 1299.99,
+      department: 'Electronics',
+      category: 'Laptops',
+      subcategory: 'Windows'
+    },
+
+    // Tablets
+    {
+      itemCode: 'TB001',
+      name: 'iPad Air',
+      variantName: '64GB',
+      description: 'Apple iPad Air',
+      price: 599.99,
+      department: 'Electronics',
+      category: 'Tablets',
+      subcategory: 'iPads'
+    },
+    {
+      itemCode: 'TB002',
+      name: 'iPad Air',
+      variantName: '256GB',
+      description: 'Apple iPad Air',
+      price: 749.99,
+      department: 'Electronics',
+      category: 'Tablets',
+      subcategory: 'iPads'
+    },
+    {
+      itemCode: 'TB003',
+      name: 'Galaxy Tab S9',
+      variantName: '128GB',
+      description: 'Samsung Galaxy Tab S9',
+      price: 699.99,
+      department: 'Electronics',
+      category: 'Tablets',
+      subcategory: 'Android'
+    },
+    {
+      itemCode: 'TB004',
+      name: 'Galaxy Tab S9',
+      variantName: '256GB',
+      description: 'Samsung Galaxy Tab S9',
+      price: 849.99,
+      department: 'Electronics',
+      category: 'Tablets',
+      subcategory: 'Android'
     }
   ]
 };
@@ -100,10 +204,6 @@ const destroyData = async () => {
     process.exit(1);
   }
 };
-
-// Add to package.json scripts:
-// "seed": "node src/seeder.js",
-// "seed:destroy": "node src/seeder.js -d"
 
 if (process.argv[2] === '-d') {
   destroyData();

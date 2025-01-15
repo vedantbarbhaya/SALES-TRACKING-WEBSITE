@@ -10,15 +10,28 @@ const productSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  variantName: {  // New field
+    type: String,
+    default: ''  // Optional, if you want a default empty string
+  },
+  department: {   // New field
+    type: String,
+    required: true
+  },
+  category: {
+    type: String,
+    required: true
+  },
+  subcategory: {
+    type: String,
+    default: ''  // Optional, if you want a default empty string
+  },
   description: {
     type: String
   },
   price: {
     type: Number,
     required: true
-  },
-  category: {
-    type: String
   },
   isActive: {
     type: Boolean,

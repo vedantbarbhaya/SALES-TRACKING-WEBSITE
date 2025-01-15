@@ -1,53 +1,31 @@
 import api from './api';
 
+// Existing createSale function remains the same
 export const createSale = async (saleData) => {
-  // Handle FormData case (when saleData is already FormData)
-  if (saleData instanceof FormData) {
+  try {
     const { data } = await api.post('/sales', saleData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
     });
     return data;
+  } catch (error) {
+    console.error('Create sale error:', error);
+    throw error;
   }
-
-  
-  // Handle JSON case (when no billPhoto)
-  if (!saleData.billPhoto) {
-    const { data } = await api.post('/sales', saleData, {
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
-    return data;
-  }
-
-  // Handle object with billPhoto case
-  const formData = new FormData();
-  
-  // Append fields correctly
-  for (let pair of saleData.entries()) {
-    if (pair[0] === 'items') {
-      // items is already stringified in your form data
-      formData.append('items', pair[1]);
-    } else if (pair[0] === 'billPhoto') {
-      formData.append('billPhoto', pair[1], pair[1].name);
-    } else {
-      formData.append(pair[0], pair[1]);
-    }
-  }
-
-  const { data } = await api.post('/sales', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data'
-    }
-  });
-  return data;
 };
 
+// Existing basic functions remain the same
 export const getSales = async (params) => {
-  const { data } = await api.get('/sales', { params });
-  return data;
+  try {
+    console.log('Calling getSales API with params:', params);
+    const { data } = await api.get('/sales', { params });
+    console.log('API response:', data);
+    return data;
+  } catch (error) {
+    console.error('getSales error:', error);
+    throw error;
+  }
 };
 
 export const getSaleById = async (id) => {
@@ -62,11 +40,35 @@ export const getSaleById = async (id) => {
   }
 };
 
-export const getSalesStats = async (params) => {
-  const { data } = await api.get('/sales/stats', { params });
+// Add new analytics endpoints
+export const getSalesByDepartment = async (params) => {
+  const { data } = await api.get('/sales/by-department', { params });
   return data;
 };
 
+export const getSalesByCategory = async (params) => {
+  const { data } = await api.get('/sales/by-category', { params });
+  return data;
+};
+
+export const getSalesByVariant = async (params) => {
+  const { data } = await api.get('/sales/by-variant', { params });
+  return data;
+};
+
+// Enhanced getSalesStats to include new fields
+export const getSalesStats = async (params) => {
+  const { data } = await api.get('/sales/stats', { 
+    params: {
+      ...params,
+      includeDepartments: true,
+      includeVariants: true
+    }
+  });
+  return data;
+};
+
+// Existing time-based reports remain the same
 export const getDailySales = async (date) => {
   const { data } = await api.get('/sales/daily', { 
     params: { date } 
@@ -81,6 +83,7 @@ export const getMonthlyReport = async (month, year) => {
   return data;
 };
 
+// Existing sale status management functions remain the same
 export const updateSaleStatus = async (id, status) => {
   const { data } = await api.put(`/sales/${id}/status`, { status });
   return data;
@@ -96,7 +99,27 @@ export const issueSaleRefund = async (id, refundData) => {
   return data;
 };
 
+// Store management remains the same
 export const getStores = async () => {
   const { data } = await api.get('/stores');
+  return data;
+};
+
+// Add enhanced search function
+export const searchSales = async (params) => {
+  const { data } = await api.get('/sales/search', {
+    params: {
+      ...params,
+      department: params.department,
+      category: params.category,
+      subcategory: params.subcategory,
+      variantName: params.variantName
+    }
+  });
+  return data;
+};
+
+export const getSalespeople = async () => {
+  const { data } = await api.get('/users/salespeople');
   return data;
 };

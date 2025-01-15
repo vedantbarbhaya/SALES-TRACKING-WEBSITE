@@ -7,6 +7,8 @@ import {
   updateProduct,
   getProductByBarcode,
   getCategories,
+  getDepartments,      // New
+  getSubcategories,    // New
   deactivateProduct,
   bulkUpdateProducts,
   searchProducts
@@ -35,4 +37,6 @@ router.route('/:id')
   .put(protect, admin, updateProduct)
   .delete(protect, admin, deactivateProduct);
 
+router.get('/departments', protect, getDepartments);
+router.get('/subcategories', protect, getSubcategories);
 export default router;

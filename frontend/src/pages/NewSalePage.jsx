@@ -29,10 +29,10 @@ import { searchProducts } from '@/services/product';
 
 const NewSalePage = () => {
   const navigate = useNavigate();
-  const { user, store } = useAuth();
+  const { user } = useAuth();
 
   const [saleData, setSaleData] = useState({
-    storeId: '',
+    storeId: user?.store?._id || '', // Set default store ID from user
     salesPersonId: '',
     customerName: '',
     date: new Date().toISOString().split('T')[0],
@@ -132,17 +132,20 @@ useEffect(() => {
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
-        const [storesData] = await Promise.all([
-          getStores(),
-        ]);
-        setStores(storesData);
+        if (user.role === 'admin') {
+          const storesData = await getStores();
+          setStores(storesData);
+        } else {
+          // For non-admin users, just set their assigned store
+          setStores([user.store]);
+        }
       } catch (err) {
         setError(handleApiError(err));
       }
     };
-
+  
     fetchInitialData();
-  }, []);
+  }, [user]);
 
   const handleDataChange = (e) => {
     const { name, value } = e.target;
@@ -152,15 +155,21 @@ useEffect(() => {
     }));
   };
 
-  // Keep all the handler functions the same
   const handleAddProduct = (product) => {
     setSaleData(prev => ({
       ...prev,
       items: [...prev.items, {
-        product: product._id,
-        productDetails: product,
+        product: product._id,  // You were setting this to empty string
+        productDetails: {
+          itemCode: product.itemCode,
+          name: product.name,
+          variantName: product.variantName,
+          department: product.department,
+          category: product.category,
+          subcategory: product.subcategory
+        },
         quantity: 1,
-        price: product.price
+        price: product.price  // You were setting this to empty string
       }]
     }));
     setShowProductSearch(false);
@@ -171,11 +180,18 @@ useEffect(() => {
       setSearchLoading(prev => ({ ...prev, [index]: true }));
       const results = await searchProducts(searchTerm);
       
-      // If searching by code and exactly one product is found, auto-populate
+      // Auto-select if searching by code and exactly one product is found
       if (searchField === 'itemCode' && results.products?.length === 1) {
         const product = results.products[0];
         handleProductSelect(index, product, searchField);
-        return; // Exit early since we've handled the selection
+        return;
+      }
+      
+      // Filter results based on the current variant if searching by name
+      if (searchField === 'name' && item.productDetails.variantName) {
+        results.products = results.products.filter(p => 
+          p.variantName === item.productDetails.variantName
+        );
       }
       
       setSearchResults(prev => ({ ...prev, [index]: results.products }));
@@ -192,7 +208,6 @@ useEffect(() => {
     
     setSaleData(prev => {
       const newItems = [...prev.items];
-      // Keep existing values and update both name and code
       const existingItem = newItems[index] || {};
       
       newItems[index] = {
@@ -201,8 +216,14 @@ useEffect(() => {
         productDetails: {
           itemCode: product.itemCode,
           name: product.name,
-          isCodeLocked: searchField === 'name', // Lock code field if name was searched
-          isNameLocked: searchField === 'itemCode' // Lock name field if code was searched
+          variantName: product.variantName,
+          department: product.department,
+          category: product.category,
+          subcategory: product.subcategory,
+          // Lock fields based on search type
+          isCodeLocked: searchField === 'name' || searchField === 'variantName',
+          isNameLocked: searchField === 'itemCode',
+          isVariantLocked: searchField === 'itemCode'
         }
       };
   
@@ -215,7 +236,6 @@ useEffect(() => {
       return newResults;
     });
   
-    // Reset prevent search after a delay
     setTimeout(() => {
       setPreventSearch(prev => {
         const newPrevent = { ...prev };
@@ -338,55 +358,56 @@ useEffect(() => {
       setLoading(true);
       setError('');
   
-      if (!saleData.storeId) {
-        throw new Error('Please select store');
+      // Use user's store ID if not admin
+      const storeId = user.role === 'admin' ? saleData.storeId : user.store._id;
+  
+      if (!storeId) {
+        throw new Error('Store ID is required');
       }
       
       if (saleData.items.length === 0) {
         throw new Error('Please add at least one product');
       }
   
-      const cleanedItems = saleData.items.map(item => ({
-        product: item.product,
-        quantity: item.quantity || 1,
-        price: item.price
-      }));
-
+      // Clean and validate items
+      const cleanedItems = saleData.items.map(item => {
+        if (!item.product || !item.quantity || !item.price) {
+          throw new Error('Invalid product data');
+        }
+        return {
+          product: item.product,
+          quantity: item.quantity,
+          price: item.price
+        };
+      });
+  
       const formData = new FormData();
-      const user = JSON.parse(localStorage.getItem('user'));
+    
+      const payload = {
+        customerName: saleData.customerName || '',
+        items: cleanedItems,
+        totalAmount: calculateTotal(),
+        store: storeId, // Use the determined store ID
+        salesman: user?.name || ''
+      };
+  
+      // Append items as a JSON string
+      formData.append('items', JSON.stringify(payload.items));
+      formData.append('customerName', payload.customerName);
+      formData.append('totalAmount', payload.totalAmount);
+      formData.append('store', payload.store);
+      formData.append('salesman', payload.salesman);
       
-      // Debug logging
-      console.log("Current saleData:", saleData);
-      console.log("Cleaned Items:", cleanedItems);
-
-      // Be explicit with the values and add some validation
-      const customerName = saleData.customerName || '';
-      const totalAmount = calculateTotal();
-      const storeId = saleData.storeId;
-      const salesmanName = user?.name || '';
-
-      // Append with validation
-      formData.append('customerName', customerName);
-      formData.append('items', JSON.stringify(cleanedItems));
-      formData.append('totalAmount', totalAmount);
-      formData.append('store', storeId);
-      formData.append('salesman', salesmanName);
-
-      
-      // Add bill photo if exists
       if (saleData.billPhoto) {
-        console.log(saleData.billPhoto)
         formData.append('billPhoto', saleData.billPhoto);
       }
-
-      // Debug: Log FormData contents
-      console.log("FormData contents:");
-      for (let pair of formData.entries()) {
-        console.log(pair[0], pair[1]);
-      }
-
+  
       const response = await createSale(formData);
-
+  
+      if (!response || !response._id) {
+        throw new Error('Invalid response from server');
+      }
+  
       setSuccess('Sale recorded successfully!');
       setSaleData({
         storeId: '',
@@ -399,13 +420,13 @@ useEffect(() => {
       setTimeout(() => {
         navigate(`/sales/${response._id}`);
       }, 3000);
-
+  
     } catch (err) {
       setError(handleApiError(err));
     } finally {
       setLoading(false);
     }
-};
+  };
 
 const handleSuccess = (response) => {
   setSuccess('Sale recorded successfully!');
@@ -434,24 +455,33 @@ const handleSuccess = (response) => {
         {/* Sale Details Section */}
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <TextField
-            select
-            fullWidth
-            label="Store *"
-            name="storeId"
-            value={saleData.storeId}
-            onChange={handleDataChange}
-            required
-            SelectProps={{
-              native: true,
-            }}
-          >
-            <option value="">Select Store</option>
-            {stores.map(store => (
-              <option key={store._id} value={store._id}>
-                {store.name}
-              </option>
-            ))}
-          </TextField>
+              select
+              fullWidth
+              label="Store *"
+              name="storeId"
+              value={user.role === 'admin' ? saleData.storeId : user.store._id}
+              onChange={handleDataChange}
+              required
+              SelectProps={{
+                native: true,
+              }}
+              disabled={user.role !== 'admin'} // Disable for non-admin users
+            >
+              <option value="">Select Store</option>
+              {user.role === 'admin' ? (
+                // Show all stores for admin
+                stores.map(store => (
+                  <option key={store._id} value={store._id}>
+                    {store.name}
+                  </option>
+                ))
+              ) : (
+                // Show only user's store for non-admin
+                <option value={user.store._id}>
+                  {user.store.name}
+                </option>
+              )}
+            </TextField>
   
 
   
@@ -605,6 +635,34 @@ const handleSuccess = (response) => {
             ),
           }}
         />
+
+        {/* Variant Name - New Field */}
+        <TextField
+          label="Variant Name"
+          value={item.productDetails.variantName || ''}
+          onChange={(e) => {
+            if (item.productDetails.isVariantLocked) return;
+            handleProductChange(index, 'productDetails.variantName', e.target.value);
+          }}
+          placeholder="Enter variant name"
+          fullWidth
+          disabled={item.productDetails.isVariantLocked}
+          InputProps={{
+            endAdornment: (
+              <IconButton 
+                size="small"
+                onClick={() => handleProductSearch(index, item.productDetails.variantName, 'variantName')}
+                disabled={!item.productDetails.variantName || searchLoading[index]}
+              >
+                {searchLoading[index] ? (
+                  <CircularProgress size={20} />
+                ) : (
+                  <SearchIcon />
+                )}
+              </IconButton>
+            ),
+          }}
+        />
     
         {/* Search Results Dropdown - Move outside of specific fields so it works for both */}
         {/* Search Results Dropdown - Move outside of specific fields so it works for both */}
@@ -622,11 +680,11 @@ const handleSuccess = (response) => {
               backgroundColor: 'white',
               border: '1px solid',
               borderColor: 'divider',
-              top: '100%',  // Position below the parent element
+              top: '100%',
               left: 0,
               right: 0
             }}
-            >
+          >
             {searchResults[index].map((product) => (
               <Box
                 key={product._id}
@@ -643,22 +701,35 @@ const handleSuccess = (response) => {
                     borderBottom: 'none'
                   }
                 }}
-                onClick={() => handleProductSelect(index, product, item.productDetails.name?.length >= 3 ? 'name' : 'itemCode')}
-                >
+                onClick={() => handleProductSelect(
+                  index, 
+                  product, 
+                  item.productDetails.name?.length >= 3 ? 'name' : 
+                  item.productDetails.variantName?.length >= 3 ? 'variantName' : 
+                  'itemCode'
+                )}
+              >
                 <Typography variant="body1" fontWeight="medium">
-                  {item.productDetails.name?.length >= 3 ? product.name : product.itemCode}
+                  {item.productDetails.name?.length >= 3 ? product.name :
+                  item.productDetails.variantName?.length >= 3 ? product.variantName :
+                  product.itemCode}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  {item.productDetails.name?.length >= 3 
-                    ? `Code: ${product.itemCode}` 
-                    : `Name: ${product.name}`
-                  }
+                  {product.name}
+                  {product.variantName && ` - ${product.variantName}`}
+                  {` (${product.itemCode})`}
                 </Typography>
-            </Box>
+                {/* Display additional product information */}
+                <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', mt: 0.5 }}>
+                  {[product.department, product.category, product.subcategory]
+                    .filter(Boolean)
+                    .join(' > ')}
+                </Typography>
+              </Box>
             ))}
-        </Paper>
-  </Box>
-)}
+          </Paper>
+        </Box>
+      )}
 
             {/* Quantity and Price in same row */}
             <Box sx={{ display: 'flex', gap: 2 }}>

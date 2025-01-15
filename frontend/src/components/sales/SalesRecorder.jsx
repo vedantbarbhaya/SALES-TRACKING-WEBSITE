@@ -56,7 +56,14 @@ const SalesRecorder = () => {
       ...prev,
       items: [...prev.items, {
         product: product._id,
-        productDetails: product,
+        productDetails: {
+          itemCode: product.itemCode,
+          name: product.name,
+          variantName: product.variantName,
+          department: product.department,
+          category: product.category,
+          subcategory: product.subcategory
+        },
         quantity: 1,
         price: product.price
       }]
@@ -112,13 +119,11 @@ const SalesRecorder = () => {
         throw new Error('Please add at least one product');
       }
 
-      // Create form data for file upload
       const formData = new FormData();
       if (saleData.billPhoto) {
         formData.append('billPhoto', saleData.billPhoto);
       }
 
-      // Append sale data
       const salePayload = {
         storeId: saleData.storeId,
         salesPersonId: saleData.salesPersonId,
@@ -133,7 +138,6 @@ const SalesRecorder = () => {
       };
 
       formData.append('data', JSON.stringify(salePayload));
-
       const response = await createSale(formData);
 
       setSuccess('Sale recorded successfully!');
@@ -146,7 +150,6 @@ const SalesRecorder = () => {
         billPhoto: null
       });
 
-      // Clear success message after 3 seconds
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError(handleApiError(err));
@@ -164,6 +167,7 @@ const SalesRecorder = () => {
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Sale Details Section */}
           <div className="space-y-3">
+            {/* Store Selection */}
             <div className="space-y-2">
               <label className="block text-sm font-medium">Store *</label>
               <select
@@ -182,6 +186,7 @@ const SalesRecorder = () => {
               </select>
             </div>
 
+            {/* Salesperson Selection */}
             <div className="space-y-2">
               <label className="block text-sm font-medium">Salesperson *</label>
               <select
@@ -200,6 +205,7 @@ const SalesRecorder = () => {
               </select>
             </div>
 
+            {/* Customer Name */}
             <div className="space-y-2">
               <label className="block text-sm font-medium">Customer Name</label>
               <input
@@ -212,6 +218,7 @@ const SalesRecorder = () => {
               />
             </div>
 
+            {/* Date Selection */}
             <div className="space-y-2">
               <label className="block text-sm font-medium">Date</label>
               <input
@@ -278,6 +285,7 @@ const SalesRecorder = () => {
                   </div>
 
                   <div className="space-y-3">
+                    {/* Product Code */}
                     <div>
                       <label className="block text-sm font-medium">Product Code</label>
                       <input
@@ -288,6 +296,7 @@ const SalesRecorder = () => {
                       />
                     </div>
 
+                    {/* Product Name */}
                     <div>
                       <label className="block text-sm font-medium">Product Name</label>
                       <input
@@ -298,6 +307,51 @@ const SalesRecorder = () => {
                       />
                     </div>
 
+                    {/* Variant Name */}
+                    <div>
+                      <label className="block text-sm font-medium">Variant</label>
+                      <input
+                        type="text"
+                        value={item.productDetails.variantName || ''}
+                        readOnly
+                        className="w-full h-12 px-3 border rounded-lg text-base bg-gray-50"
+                      />
+                    </div>
+
+                    {/* Department */}
+                    <div>
+                      <label className="block text-sm font-medium">Department</label>
+                      <input
+                        type="text"
+                        value={item.productDetails.department || ''}
+                        readOnly
+                        className="w-full h-12 px-3 border rounded-lg text-base bg-gray-50"
+                      />
+                    </div>
+
+                    {/* Category & Subcategory */}
+                    <div className="flex gap-3">
+                      <div className="space-y-2 flex-1">
+                        <label className="block text-sm font-medium">Category</label>
+                        <input
+                          type="text"
+                          value={item.productDetails.category || ''}
+                          readOnly
+                          className="w-full h-12 px-3 border rounded-lg text-base bg-gray-50"
+                        />
+                      </div>
+                      <div className="space-y-2 flex-1">
+                        <label className="block text-sm font-medium">Subcategory</label>
+                        <input
+                          type="text"
+                          value={item.productDetails.subcategory || ''}
+                          readOnly
+                          className="w-full h-12 px-3 border rounded-lg text-base bg-gray-50"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Quantity and Price */}
                     <div className="flex gap-3">
                       <div className="space-y-2 flex-1">
                         <label className="block text-sm font-medium">Quantity</label>
@@ -309,7 +363,6 @@ const SalesRecorder = () => {
                           min="1"
                         />
                       </div>
-
                       <div className="space-y-2 flex-1">
                         <label className="block text-sm font-medium">Price</label>
                         <input

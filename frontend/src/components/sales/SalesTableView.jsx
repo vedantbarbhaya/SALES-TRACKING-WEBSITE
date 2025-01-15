@@ -36,11 +36,7 @@ const SaleRow = ({ sale }) => {
     <>
       <TableRow sx={{ '& > *': { borderBottom: 'unset' } }}>
         <TableCell>
-          <IconButton
-            aria-label="expand row"
-            size="small"
-            onClick={() => setOpen(!open)}
-          >
+          <IconButton size="small" onClick={() => setOpen(!open)}>
             {open ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
           </IconButton>
         </TableCell>
@@ -71,36 +67,42 @@ const SaleRow = ({ sale }) => {
               </Typography>
               <Table size="small">
                 <TableHead>
-                    <TableRow>
+                  <TableRow>
                     <TableCell>Product Code</TableCell>
                     <TableCell>Name</TableCell>
+                    <TableCell>Variant</TableCell>
+                    <TableCell>Department</TableCell>
+                    <TableCell>Category</TableCell>
+                    <TableCell>Subcategory</TableCell>
                     <TableCell align="right">Quantity</TableCell>
                     <TableCell align="right">Price</TableCell>
                     <TableCell align="right">Total</TableCell>
-                    </TableRow>
+                  </TableRow>
                 </TableHead>
                 <TableBody>
-                    {sale.items.map((item) => (
+                  {sale.items.map((item) => (
                     <TableRow key={item._id}>
-                        <TableCell>{item.product?.itemCode}</TableCell>
-                        <TableCell>{item.product?.name}</TableCell>
-                        <TableCell align="right">{item.quantity}</TableCell>
-                        {/* Use the price stored in the sale item */}
-                        <TableCell align="right">${Number(item.price).toFixed(2)}</TableCell>
-                        {/* Calculate total based on the sale item price */}
-                        <TableCell align="right">${(item.price * item.quantity).toFixed(2)}</TableCell>
+                      <TableCell>{item.product?.itemCode}</TableCell>
+                      <TableCell>{item.product?.name}</TableCell>
+                      <TableCell>{item.product?.variantName || '-'}</TableCell>
+                      <TableCell>{item.product?.department || '-'}</TableCell>
+                      <TableCell>{item.product?.category || '-'}</TableCell>
+                      <TableCell>{item.product?.subcategory || '-'}</TableCell>
+                      <TableCell align="right">{item.quantity}</TableCell>
+                      <TableCell align="right">${Number(item.price).toFixed(2)}</TableCell>
+                      <TableCell align="right">${(item.price * item.quantity).toFixed(2)}</TableCell>
                     </TableRow>
-                    ))}
-                    <TableRow>
-                    <TableCell colSpan={4} align="right" sx={{ fontWeight: 'bold' }}>
-                        Total Amount:
+                  ))}
+                  <TableRow>
+                    <TableCell colSpan={8} align="right" sx={{ fontWeight: 'bold' }}>
+                      Total Amount:
                     </TableCell>
                     <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                        ${sale.totalAmount.toFixed(2)}
+                      ${sale.totalAmount.toFixed(2)}
                     </TableCell>
-                    </TableRow>
+                  </TableRow>
                 </TableBody>
-                </Table>
+              </Table>
             </Box>
           </Collapse>
         </TableCell>
@@ -226,32 +228,32 @@ const SalesTableView = () => {
         </Box>
       ) : (
         <TableContainer component={Paper}>
-        <Table>
-        <TableHead>
-            <TableRow>
-            <TableCell />  {/* For expand/collapse */}
-            <TableCell>Sale Number</TableCell>
-            <TableCell>Date & Time</TableCell>
-            <TableCell>Store</TableCell>
-            <TableCell>Salesperson</TableCell>
-            <TableCell>Customer</TableCell>
-            <TableCell>Total Amount</TableCell>
-            <TableCell>Status</TableCell>
-            </TableRow>
-        </TableHead>
-        <TableBody>
-            {salesData.map((sale) => (
-            <SaleRow key={sale._id} sale={sale} />
-            ))}
-            {salesData.length === 0 && (
-            <TableRow>
-                <TableCell colSpan={8} align="center">
-                <Typography color="text.secondary">No sales data available</Typography>
-                </TableCell>
-            </TableRow>
-            )}
-        </TableBody>
-        </Table>
+            <Table>
+            <TableHead>
+                <TableRow>
+                <TableCell />  {/* For expand/collapse */}
+                <TableCell>Sale Number</TableCell>
+                <TableCell>Date & Time</TableCell>
+                <TableCell>Store</TableCell>
+                <TableCell>Salesperson</TableCell>
+                <TableCell>Customer</TableCell>
+                <TableCell>Total Amount</TableCell>
+                <TableCell>Status</TableCell>
+                </TableRow>
+            </TableHead>
+            <TableBody>
+                {salesData.map((sale) => (
+                <SaleRow key={sale._id} sale={sale} />
+                ))}
+                {salesData.length === 0 && (
+                <TableRow>
+                    <TableCell colSpan={8} align="center">
+                    <Typography color="text.secondary">No sales data available</Typography>
+                    </TableCell>
+                </TableRow>
+                )}
+            </TableBody>
+            </Table>
           <TablePagination
             component="div"
             count={totalRows}

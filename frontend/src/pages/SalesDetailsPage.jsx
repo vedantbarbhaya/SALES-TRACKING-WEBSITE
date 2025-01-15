@@ -127,31 +127,71 @@ const SaleDetailsPage = () => {
 
         {/* Products List */}
         <Card className="p-4">
-          <h3 className="font-semibold mb-3">Products</h3>
-          <div className="space-y-3">
-            {sale?.items.map((item, index) => (
-              <div
-                key={index}
-                className="flex items-center justify-between py-2 border-b last:border-0"
-              >
-                <div className="flex-1">
-                  <div className="font-medium">{item.product.name}</div>
-                  <div className="text-sm text-gray-500">
-                    {item.quantity} × ${item.price.toFixed(2)}
-                  </div>
-                </div>
-                <div className="font-medium">
-                  ${(item.quantity * item.price).toFixed(2)}
-                </div>
-              </div>
-            ))}
+  <h3 className="font-semibold mb-3">Products</h3>
+  <div className="space-y-3">
+    {sale?.items.map((item, index) => (
+      <div
+        key={index}
+        className="py-2 border-b last:border-0"
+      >
+        <div className="flex justify-between">
+          <div className="flex-1">
+            {/* Product Name and Variant */}
+            <div className="font-medium flex items-center gap-2">
+              <span>{item.product.name}</span>
+              {item.product.variantName && (
+                <span className="text-sm px-2 py-0.5 bg-blue-100 text-blue-700 rounded">
+                  {item.product.variantName}
+                </span>
+              )}
+            </div>
+            
+            {/* Product Categories */}
+            <div className="text-xs text-gray-500 mt-1">
+              {[
+                item.product.department,
+                item.product.category,
+                item.product.subcategory
+              ]
+                .filter(Boolean)
+                .join(' > ')}
+            </div>
 
-            <div className="flex justify-between items-center pt-3 font-bold">
-              <span>Total</span>
-              <span>${sale?.totalAmount.toFixed(2)}</span>
+            {/* Product Code */}
+            <div className="text-sm text-gray-500 mt-1">
+              Code: {item.product.itemCode}
+            </div>
+
+            {/* Quantity and Price */}
+            <div className="text-sm text-gray-500 mt-1">
+              {item.quantity} × ${item.price.toFixed(2)}
             </div>
           </div>
-        </Card>
+
+          {/* Total Price */}
+          <div className="font-medium text-right">
+            ${(item.quantity * item.price).toFixed(2)}
+          </div>
+        </div>
+      </div>
+    ))}
+
+    {/* Sale Summary */}
+    <div className="pt-3 space-y-2">
+      <div className="flex justify-between items-center text-sm text-gray-600">
+        <span>Subtotal</span>
+        <span>${sale?.totalAmount.toFixed(2)}</span>
+      </div>
+
+      {/* Add any additional calculations if needed */}
+
+      <div className="flex justify-between items-center pt-2 font-bold border-t">
+        <span>Total</span>
+        <span>${sale?.totalAmount.toFixed(2)}</span>
+      </div>
+    </div>
+  </div>
+</Card>
 
         {/* Bill Photo */}
         {sale?.billPhoto && (
