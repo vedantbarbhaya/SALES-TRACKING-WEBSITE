@@ -6,7 +6,8 @@
       "start": "node src/app.js",
       "dev": "nodemon src/app.js",
       "seed": "node src/seeder.js",
-      "seed:destroy": "node src/seeder.js -d"
+      "seed:destroy": "node src/seeder.js -d",
+      "upload-products": "node src/utils/uploadProducts.js"
     },
     "dependencies": {
       "bcryptjs": "^2.4.3",
