@@ -1,4 +1,12 @@
 {
+  "name": "sales-tracking-system",
+  "version": "1.0.0",
+  "description": "Sales Tracking System",
+  "main": "index.js",
+  "scripts": {
+    "start": "cd backend && node src/app.js",
+    "heroku-postbuild": "cd frontend && npm install && npm run build"
+  },
   "dependencies": {
     "dotenv": "^16.4.7",
     "mongodb": "^6.12.0",

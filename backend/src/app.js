@@ -33,18 +33,26 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-
-
-// Routes
+// API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/sales', salesRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/stores', storeRoutes);
 app.use('/api/upload', uploadRoutes);
 
-// Error Handler
-app.use(errorHandler);
+// Serve static assets in production
+if (process.env.NODE_ENV === 'production') {
+  // Set static folder
+  const staticPath = path.join(__dirname, '../../frontend/dist');
+  app.use(express.static(staticPath));
+  
+  app.get('*', (req, res) => {
+    res.sendFile(path.resolve(staticPath, 'index.html'));
+  });
+}
 
+// Error Handler - should be after routes
+app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 
