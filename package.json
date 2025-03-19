@@ -5,9 +5,13 @@
   "main": "index.js",
   "scripts": {
     "start": "cd backend && node src/app.js",
-    "heroku-postbuild": "cd frontend && npm install && npm run build"
+    "build": "cd frontend && npm install && npm run build",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\""
   },
   "dependencies": {
+    "bcryptjs": "^3.0.2",
     "dotenv": "^16.4.7",
     "mongodb": "^6.12.0",
     "mongoose": "^8.10.1",

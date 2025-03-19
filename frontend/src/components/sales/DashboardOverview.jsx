@@ -13,7 +13,7 @@ import {
   CardContent
 } from '@mui/material';
 import { 
-  DollarSign, 
+  IndianRupeeIcon,
   ShoppingBag, 
   TrendingUp, 
   Users
@@ -99,8 +99,8 @@ const DashboardOverview = () => {
   }
 
   return (
-    <Box className="bg-white shadow-sm border border-gray-100">
-      <div className="p-6">
+    <Box className="bg-white shadow-sm border-0 mb-6">
+      <div className="p-4">
         {/* Header and Filters */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
           <Typography variant="h6" className="text-gray-900">
@@ -159,14 +159,14 @@ const DashboardOverview = () => {
                       Total Sales
                     </Typography>
                     <Typography variant="h5" component="div">
-                      ${stats?.summary?.totalAmount?.toFixed(2) || '0.00'}
+                      INR {stats?.summary?.totalAmount?.toFixed(2) || '0.00'}
                     </Typography>
                     <Typography variant="body2" color="textSecondary">
                       {stats?.summary?.totalSales || 0} orders
                     </Typography>
                   </Box>
                   <Box sx={{ p: 1, bgcolor: 'primary.50', borderRadius: 2 }}>
-                    <DollarSign className="text-primary-600" size={24} />
+                    <IndianRupeeIcon className="text-primary-600" size={24} />
                   </Box>
                 </Box>
               </CardContent>
@@ -183,7 +183,7 @@ const DashboardOverview = () => {
                       Average Order
                     </Typography>
                     <Typography variant="h5" component="div">
-                      ${stats?.summary?.averageAmount?.toFixed(2) || '0.00'}
+                      INR {stats?.summary?.averageAmount?.toFixed(2) || '0.00'}
                     </Typography>
                     <Typography variant="body2" color="textSecondary">
                       Per transaction

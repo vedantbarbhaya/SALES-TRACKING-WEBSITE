@@ -14,6 +14,10 @@ import salesRoutes from './routes/sales.js';
 import productRoutes from './routes/products.js';
 import storeRoutes from './routes/stores.js';
 import uploadRoutes from './routes/upload.js';
+import storeInventoryMapRoutes from './routes/storeInventoryMap.js';
+import inventoryRoutes from './routes/inventory.js';
+
+
 
 // ES modules fix for __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -39,6 +43,8 @@ app.use('/api/sales', salesRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/stores', storeRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/inventory', inventoryRoutes);
+app.use('/api/stores/inventory-mapping', storeInventoryMapRoutes);
 
 // Serve static assets in production
 if (process.env.NODE_ENV === 'production') {

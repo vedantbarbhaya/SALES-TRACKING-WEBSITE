@@ -29,7 +29,7 @@ const Layout = () => {
     if (isMobile) {
       setSidebarCollapsed(true);
     }
-  }, [location, isMobile]);
+  }, [location.pathname, isMobile]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -52,6 +52,13 @@ const Layout = () => {
           <div
             className="fixed inset-0 bg-black bg-opacity-50 z-10"
             onClick={() => setSidebarCollapsed(true)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                setSidebarCollapsed(true);
+              }
+            }}
+            role="button"
+            tabIndex={0}
           />
         )}
 

@@ -2,6 +2,7 @@ import asyncHandler from 'express-async-handler';
 import Sale from '../models/Sale.js';
 import Product from '../models/Product.js';
 import mongoose from 'mongoose';
+import { reduceInventoryFromSale } from '../models/InventoryFactory.js';
 
 const getStoreFilter = (storeId, user) => {
   // For admin users selecting 'all'
@@ -20,13 +21,12 @@ const getStoreFilter = (storeId, user) => {
 // @desc    Create new sale
 // @route   POST /api/sales
 // @access  Private
-// Modify the createSale controller
 export const createSale = asyncHandler(async (req, res) => {
   // Parse items if it's a string (from FormData)
   const items = typeof req.body.items === 'string' ? 
     JSON.parse(req.body.items) : req.body.items;
 
-  const { customerName, totalAmount, salesman} = req.body;
+  const { customerName, totalAmount, salesman } = req.body;
 
   // Validate items and calculate total
   let calculatedTotal = 0;
@@ -53,7 +53,7 @@ export const createSale = asyncHandler(async (req, res) => {
     contentType: req.file.mimetype
   } : null;
 
-  console.log(billPhoto)
+  // Create the sale
   const sale = await Sale.create({
     store: req.body.store,
     salesperson: req.user._id,
@@ -64,11 +64,34 @@ export const createSale = asyncHandler(async (req, res) => {
     salesmanName: salesman
   });
 
+  // Now reduce inventory quantities based on the sale
+  try {
+    const inventoryResults = await reduceInventoryFromSale(sale);
+    
+    // If there were any failed inventory updates, log them but don't fail the sale
+    if (inventoryResults.failed.length > 0) {
+      console.warn('Some inventory updates failed:', inventoryResults.failed);
+    }
+    
+    // Optionally add inventory update results to response for debugging
+    /*
+    sale.inventoryUpdates = {
+      successful: inventoryResults.successful.length,
+      failed: inventoryResults.failed.length
+    };
+    */
+  } catch (error) {
+    // Log error but don't fail the sale creation
+    console.error('Error updating inventory:', error);
+    // You might want to add a flag to the sale indicating inventory wasn't updated
+    // await Sale.findByIdAndUpdate(sale._id, { inventoryUpdated: false });
+  }
+
   const populatedSale = await Sale.findById(sale._id)
     .populate('store')
     .populate('salesperson', 'name')
     .populate('items.product', 'name itemCode')
-    .select('billPhoto.data'); 
+    .select('-billPhoto.data'); 
     
   // Don't send the binary data of the photo in the response
   const saleResponse = populatedSale.toObject();
@@ -81,7 +104,6 @@ export const createSale = asyncHandler(async (req, res) => {
 
   res.status(201).json(saleResponse);
 });
-
 
 // @desc    Get all sales for a store
 // @route   GET /api/sales
@@ -165,11 +187,6 @@ export const getSales = asyncHandler(async (req, res) => {
     throw error;
   }
 });
-
-// @desc    Get all sales for a store
-// @route   GET /api/sales
-// @access  Private
-// In salesController.js, modify getSales function:
 
 // In getSalesStats function:
 export const getSalesStats = asyncHandler(async (req, res) => {
@@ -437,7 +454,6 @@ export const cancelSale = asyncHandler(async (req, res) => {
 // @desc    Get daily sales data
 // @route   GET /api/sales/daily
 // @access  Private
-
 export const getDailySales = asyncHandler(async (req, res) => {
   const startDate = req.query.startDate 
     ? new Date(req.query.startDate)

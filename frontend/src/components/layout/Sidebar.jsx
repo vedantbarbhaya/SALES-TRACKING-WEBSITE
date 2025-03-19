@@ -34,7 +34,7 @@ const Sidebar = ({ isCollapsed, toggleCollapse }) => {
   ];
 
   return (
-    <div className="h-full bg-white border-r border-gray-200">
+    <div className="h-full bg-white border-r border-gray-200 z-30">
       {/* Header with toggle */}
       <div className="flex items-center justify-between p-4">
         {!isCollapsed && (
@@ -43,9 +43,10 @@ const Sidebar = ({ isCollapsed, toggleCollapse }) => {
           </span>
         )}
         <button
-          onClick={toggleCollapse}
-          className="p-1.5 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-        >
+  type="button"
+  onClick={toggleCollapse}
+  className="p-1.5 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+>
           {isCollapsed ? 
             <ChevronRight className="h-5 w-5 text-gray-500" /> : 
             <ChevronLeft className="h-5 w-5 text-gray-500" />

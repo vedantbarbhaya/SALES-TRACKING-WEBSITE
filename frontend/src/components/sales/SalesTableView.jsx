@@ -175,62 +175,69 @@ const SalesTableView = () => {
   };
 
   const handleChangeRowsPerPage = (event) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
+    setRowsPerPage(Number.parseInt(event.target.value, 10));
     setPage(0);
   };
 
   return (
-    <Box className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-      <Typography variant="h6" className="text-gray-900 mb-6">
-        Sales Overview
-      </Typography>
-      
-      <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
-        <FormControl fullWidth>
-          <InputLabel>Store</InputLabel>
-          <Select
-            value={selectedStore}
-            label="Store"
-            onChange={handleStoreChange}
-          >
-            <MenuItem value="all">All Stores</MenuItem>
-            {stores.map((store) => (
-              <MenuItem key={store._id} value={store._id}>
-                {store.name}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-
-        <FormControl fullWidth>
-          <InputLabel>Time Range</InputLabel>
-          <Select
-            value={timeRange}
-            label="Time Range"
-            onChange={handleTimeRangeChange}
-          >
-            <MenuItem value="7days">Last 7 Days</MenuItem>
-            <MenuItem value="30days">Last 30 Days</MenuItem>
-            <MenuItem value="all">All Time</MenuItem>
-          </Select>
-        </FormControl>
-      </Box>
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
-
+    <div className="bg-gray-50">
+      <div className="p-4 bg-white">
+        <Typography variant="h6" className="text-gray-900 mb-4">
+          Sales Overview
+        </Typography>
+          
+        <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
+          <FormControl fullWidth>
+            <InputLabel>Store</InputLabel>
+            <Select
+              value={selectedStore}
+              label="Store"
+              onChange={handleStoreChange}
+            >
+              <MenuItem value="all">All Stores</MenuItem>
+              {stores.map((store) => (
+                <MenuItem key={store._id} value={store._id}>
+                  {store.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+  
+          <FormControl fullWidth>
+            <InputLabel>Time Range</InputLabel>
+            <Select
+              value={timeRange}
+              label="Time Range"
+              onChange={handleTimeRangeChange}
+            >
+              <MenuItem value="7days">Last 7 Days</MenuItem>
+              <MenuItem value="30days">Last 30 Days</MenuItem>
+              <MenuItem value="all">All Time</MenuItem>
+            </Select>
+          </FormControl>
+        </Box>
+  
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
+      </div>
+  
       {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'center', p: 3, backgroundColor: 'white' }}>
           <CircularProgress />
         </Box>
       ) : (
-        <TableContainer component={Paper}>
-            <Table>
+        <TableContainer component={Paper} sx={{ 
+          boxShadow: 'none', 
+          borderRadius: 0,
+          backgroundColor: 'white',
+          '.MuiPaper-root': { boxShadow: 'none', borderRadius: 0 } 
+        }}>
+          <Table>
             <TableHead>
-                <TableRow>
+              <TableRow>
                 <TableCell />  {/* For expand/collapse */}
                 <TableCell>Sale Number</TableCell>
                 <TableCell>Date & Time</TableCell>
@@ -239,21 +246,21 @@ const SalesTableView = () => {
                 <TableCell>Customer</TableCell>
                 <TableCell>Total Amount</TableCell>
                 <TableCell>Status</TableCell>
-                </TableRow>
+              </TableRow>
             </TableHead>
             <TableBody>
-                {salesData.map((sale) => (
+              {salesData.map((sale) => (
                 <SaleRow key={sale._id} sale={sale} />
-                ))}
-                {salesData.length === 0 && (
+              ))}
+              {salesData.length === 0 && (
                 <TableRow>
-                    <TableCell colSpan={8} align="center">
+                  <TableCell colSpan={8} align="center">
                     <Typography color="text.secondary">No sales data available</Typography>
-                    </TableCell>
+                  </TableCell>
                 </TableRow>
-                )}
+              )}
             </TableBody>
-            </Table>
+          </Table>
           <TablePagination
             component="div"
             count={totalRows}
@@ -265,7 +272,7 @@ const SalesTableView = () => {
           />
         </TableContainer>
       )}
-    </Box>
+    </div>
   );
 };
 
