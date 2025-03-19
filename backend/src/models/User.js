@@ -1,3 +1,4 @@
+// Updated version of src/models/User.js with debugging
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
@@ -30,15 +31,36 @@ const userSchema = new mongoose.Schema({
 });
 
 userSchema.pre('save', async function(next) {
+  // Only hash the password if it's modified
   if (!this.isModified('password')) {
     return next();
   }
-  const salt = await bcrypt.genSalt(10);
-  this.password = await bcrypt.hash(this.password, salt);
+  
+  console.log(`Hashing password for user: ${this.email}`);
+  
+  try {
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+    console.log(`Password hashed successfully: ${this.password.substring(0, 15)}...`);
+    next();
+  } catch (error) {
+    console.error(`Error hashing password: ${error.message}`);
+    next(error);
+  }
 });
 
 userSchema.methods.matchPassword = async function(enteredPassword) {
-  return await bcrypt.compare(enteredPassword, this.password);
+  console.log(`In matchPassword method for user: ${this.email}`);
+  console.log(`Comparing entered password with hash: ${this.password.substring(0, 15)}...`);
+  
+  try {
+    const isMatch = await bcrypt.compare(enteredPassword, this.password);
+    console.log(`Password match result: ${isMatch}`);
+    return isMatch;
+  } catch (error) {
+    console.error(`Error in matchPassword: ${error.message}`);
+    return false;
+  }
 };
 
 const User = mongoose.model('User', userSchema);

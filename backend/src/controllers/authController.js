@@ -14,21 +14,62 @@ const generateToken = (id) => {
 // @access  Public
 export const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
-
-  const user = await User.findOne({ email }).populate('store');
-
-  if (user && (await user.matchPassword(password))) {
-    res.json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      store: user.store,
-      token: generateToken(user._id),
+  
+  console.log(`Login attempt for email: ${email}`);
+  
+  try {
+    // Try case-insensitive query with trimmed email
+    const user = await User.findOne({ 
+      email: { $regex: new RegExp(`^${email.trim()}$`, 'i') } 
     });
-  } else {
-    res.status(401);
-    throw new Error('Invalid email or password');
+    
+    if (!user) {
+      console.log(`User not found with email: ${email}`);
+      
+      // Debug: Check if any users exist
+      const allUsers = await User.find({}).limit(5);
+      console.log(`Total users in database: ${allUsers.length}`);
+      if (allUsers.length > 0) {
+        console.log('Sample users:');
+        allUsers.forEach(u => console.log(` - ${u.email}`));
+      }
+      
+      res.status(401);
+      throw new Error('Invalid email or password');
+    }
+    
+    console.log(`User found: ${user.name}`);
+    
+    // Populate store information separately if needed
+    try {
+      await user.populate('store');
+    } catch (err) {
+      console.log(`Warning: Could not populate store: ${err.message}`);
+      // Continue anyway, don't fail the login
+    }
+    
+    // Check password
+    const isMatch = await user.matchPassword(password);
+    
+    if (isMatch) {
+      // Success - generate token and return user data
+      res.json({
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        store: user.store,
+        token: generateToken(user._id),
+      });
+    } else {
+      console.log('Password verification failed');
+      res.status(401);
+      throw new Error('Invalid email or password');
+    }
+  } catch (error) {
+    console.error(`Login error: ${error.message}`);
+    res.status(error.statusCode || 401);
+    throw new Error(error.message || 'Invalid email or password');
   }
 });
 
