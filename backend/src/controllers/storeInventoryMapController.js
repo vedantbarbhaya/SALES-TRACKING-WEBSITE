@@ -53,14 +53,22 @@ export const getMappings = asyncHandler(async (req, res) => {
 
 // @desc    Get mapping by store ID
 // @route   GET /api/stores/inventory-mapping/:storeId
-// @access  Admin
+// @access  Private
 export const getMappingByStore = asyncHandler(async (req, res) => {
-  const mapping = await StoreInventoryMap.findOne({ store: req.params.storeId })
+  const { storeId } = req.params;
+  
+  // Authorization check - users can only access their own store's mapping unless they're admin
+  if (req.user.role !== 'admin' && req.user.store.toString() !== storeId) {
+    res.status(403);
+    throw new Error('Not authorized to access this store\'s inventory mapping');
+  }
+  
+  const mapping = await StoreInventoryMap.findOne({ store: storeId })
     .populate('store', 'name location');
   
   if (!mapping) {
     res.status(404);
-    throw new Error(`No inventory mapping found for store ID: ${req.params.storeId}`);
+    throw new Error(`No inventory mapping found for store ID: ${storeId}`);
   }
   
   res.json(mapping);

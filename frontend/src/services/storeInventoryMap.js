@@ -12,10 +12,14 @@ export const getInventoryMappings = async () => {
 
 export const getMappingByStore = async (storeId) => {
   try {
+    console.log(`Fetching inventory mapping for store: ${storeId}`);
     const { data } = await api.get(`/stores/inventory-mapping/${storeId}`);
+    console.log('Mapping data retrieved:', data);
     return data;
   } catch (error) {
-    console.error('Get mapping by store error:', error);
+    console.error(`Error fetching mapping for store ${storeId}:`, error);
+    console.error('Response status:', error.response?.status);
+    console.error('Response data:', error.response?.data);
     throw error;
   }
 };

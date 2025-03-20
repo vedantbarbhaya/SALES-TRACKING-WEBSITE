@@ -10,13 +10,16 @@ import {
 
 const router = express.Router();
 
+// Routes that require admin access
 router.route('/')
   .post(protect, admin, createMapping)
   .get(protect, admin, getMappings);
 
+// Store mapping route - accessible to all authenticated users
 router.route('/:storeId')
-  .get(protect, admin, getMappingByStore);
+  .get(protect, getMappingByStore); // Removed admin middleware
 
+// Routes for specific mapping IDs - require admin access
 router.route('/id/:id')
   .put(protect, admin, updateMapping)
   .delete(protect, admin, deleteMapping);

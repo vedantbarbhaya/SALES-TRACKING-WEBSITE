@@ -3,6 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import mongoose from 'mongoose'; 
 
 // Load env vars before other imports
 dotenv.config();
@@ -46,6 +47,68 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/stores/inventory-mapping', storeInventoryMapRoutes);
 
+// temp code
+app.get('/api/direct-test', async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const collectionName = 'INV_KR1';
+    
+    // Check if collection exists
+    const collections = await db.listCollections({name: collectionName}).toArray();
+    const collectionExists = collections.length > 0;
+    
+    if (!collectionExists) {
+      return res.json({
+        error: `Collection ${collectionName} does not exist`,
+        availableCollections: await db.listCollections().toArray()
+      });
+    }
+    
+    // Get count and sample documents
+    const count = await db.collection(collectionName).countDocuments({});
+    const sample = await db.collection(collectionName).find({}).limit(2).toArray();
+    
+    res.json({
+      database: db.databaseName,
+      collection: collectionName,
+      exists: collectionExists,
+      count,
+      sample
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message, stack: error.stack });
+  }
+});
+
+app.get('/api/model-test', async (req, res) => {
+  try {
+    // Import the function dynamically
+    const { createInventoryModel } = await import('./models/InventoryFactory.js');
+    const collectionName = 'INV_KR1';
+    const modelName = `Inventory${collectionName.replace('INV_', '')}`;
+    
+    // Create the model
+    const InventoryModel = createInventoryModel(modelName, collectionName);
+    
+    // Test a find operation
+    const findResult = await InventoryModel.find({}).limit(5);
+    
+    res.json({
+      modelName,
+      collectionName,
+      modelRegistered: mongoose.models[modelName] ? true : false,
+      findResultCount: findResult.length,
+      findResult
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      error: error.message, 
+      stack: error.stack 
+    });
+  }
+});
+// temp code
+
 // Serve static assets in production
 if (process.env.NODE_ENV === 'production') {
   // Set static folder
@@ -56,6 +119,8 @@ if (process.env.NODE_ENV === 'production') {
     res.sendFile(path.resolve(staticPath, 'index.html'));
   });
 }
+
+
 
 // Error Handler - should be after routes
 app.use(errorHandler);

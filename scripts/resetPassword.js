@@ -125,8 +125,8 @@ const resetPassword = async (email, newPassword) => {
 };
 
 // Email and new password to use for reset
-const email = 'admin@rudhvay.com';
-const newPassword = 'Admin123!';
+const email = 'ancy.rudhvay@gmail.com';
+const newPassword = 'Kerala@ancy@01';
 
 console.log(`Starting password reset for ${email}...`);
 resetPassword(email, newPassword);

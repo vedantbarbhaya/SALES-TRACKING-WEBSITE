@@ -8,6 +8,9 @@ import { createInventoryModel } from '../models/InventoryFactory.js';
 // @access  Private
 export const getInventory = asyncHandler(async (req, res) => {
   const { collection, search, department, category, page = 1, limit = 20 } = req.query;
+
+  console.log(`Connected to database: ${mongoose.connection.db.databaseName}`);
+  console.log(`MongoDB URI (partial): ${process.env.MONGODB_URI.substring(0, 40)}...`);
   
   // Validate collection name
   if (!collection || !collection.match(/^INV_[A-Za-z0-9]+$/)) {
@@ -39,8 +42,11 @@ export const getInventory = asyncHandler(async (req, res) => {
       filter.category = category;
     }
     
-    // Add isActive filter if it exists in the schema
-    filter.isActive = true;
+    const modelSchema = InventoryModel.schema;
+    filter.$or = [
+      { isActive: true },
+      { isActive: { $exists: false } }  // Also match documents where isActive doesn't exist
+    ];
     
     // Get count
     const total = await InventoryModel.countDocuments(filter);

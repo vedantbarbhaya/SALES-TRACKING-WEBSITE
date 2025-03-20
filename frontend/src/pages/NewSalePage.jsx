@@ -10,7 +10,8 @@ import {
   CardContent,
   Box,
   Alert,
-  CircularProgress
+  CircularProgress,
+  Chip
 } from '@mui/material';
 import {
   PhotoCamera as CameraIcon,
@@ -24,8 +25,10 @@ import {
 import ProductSearch from '@/components/sales/ProductSearch';
 import { useAuth } from '@/hooks/useAuth';
 import { handleApiError } from '@/utils/errorHandler';
-import { createSale, getStores} from '@/services/sales';
-import { searchProducts } from '@/services/product';
+import { createSale, getStores } from '@/services/sales';
+import { searchProducts, getProductByBarcode } from '@/services/product';
+import { getMappingByStore } from '@/services/storeInventoryMap';
+import api from '@/services/api';
 
 const NewSalePage = () => {
   const navigate = useNavigate();
@@ -33,102 +36,44 @@ const NewSalePage = () => {
 
   const [saleData, setSaleData] = useState({
     storeId: user?.store?._id || '', // Set default store ID from user
-    salesPersonId: '',
     customerName: '',
     date: new Date().toISOString().split('T')[0],
     items: [],
     billPhoto: null
   });
 
-
   // API Calls
   const [showProductSearch, setShowProductSearch] = useState(false);
   const [stores, setStores] = useState([]);
   const [searchResults, setSearchResults] = useState({});  // Object to store search results for each item
   const [searchLoading, setSearchLoading] = useState({}); // Object to track loading state for each search
-  // Add a new state to track if selection was just made
   const [preventSearch, setPreventSearch] = useState({});
+  const [storeInventoryCollection, setStoreInventoryCollection] = useState('');
 
-
-// UI
+  // UI
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-// debounced search effect 
-useEffect(() => {
-  
-  const debouncedSearch = async (index, field, value) => {
-    if (preventSearch[index]) {
-      return;
-    }
-  
-    if (!value || value.length < 3) {
-      setSearchResults(prev => {
-        const newResults = { ...prev };
-        delete newResults[index];
-        return newResults;
-      });
-      return;
-    }
-  
-    try {
-      setSearchLoading(prev => ({ ...prev, [index]: true }));
-      const results = await searchProducts(value);
-  
-      // Format results to show only relevant field
-      const formattedResults = results.products?.map(product => ({
-        ...product,
-        displayValue: field === 'itemCode' ? product.itemCode : product.name
-      }));
-  
-      if (formattedResults?.length > 0) {
-        setSearchResults(prev => ({ ...prev, [index]: formattedResults }));
-      } else {
-        setSearchResults(prev => {
-          const newResults = { ...prev };
-          delete newResults[index];
-          return newResults;
-        });
-      }
-    } catch (err) {
-      console.error('Search failed:', err);
-      setError('Failed to search products');
-    } finally {
-      setSearchLoading(prev => ({ ...prev, [index]: false }));
-    }
-  };
-
-  const timeouts = {};
-
-  saleData.items.forEach((item, index) => {
-    // Only check product code and name fields
-    const codeLength = item.productDetails?.itemCode?.length || 0;
-    const nameLength = item.productDetails?.name?.length || 0;
-
-    // Only proceed if either code or name has 3+ characters
-    if (codeLength >= 3 || nameLength >= 3) {
-      if (timeouts[index]) clearTimeout(timeouts[index]);
-      
-      timeouts[index] = setTimeout(() => {
-        // Only search if one of the fields has content but not both
-        if ((codeLength >= 3 && !nameLength) || (nameLength >= 3 && !codeLength)) {
-          debouncedSearch(
-            index,
-            nameLength >= 3 ? 'name' : 'itemCode',
-            nameLength >= 3 ? item.productDetails.name : item.productDetails.itemCode
-          );
+  // Get store inventory collection
+  useEffect(() => {
+    const fetchStoreInventoryMapping = async () => {
+      try {
+        if (user?.store?._id) {
+          const mapping = await getMappingByStore(user.store._id);
+          setStoreInventoryCollection(mapping.inventoryCollection);
+          console.log('Store inventory collection:', mapping.inventoryCollection);
         }
-      }, 300);
-    }
-  });
+      } catch (err) {
+        console.error('Error fetching store inventory mapping:', err);
+        setError('No inventory mapping found for your store. Please contact an administrator.');
+      }
+    };
 
-  return () => {
-    Object.values(timeouts).forEach(timeout => clearTimeout(timeout));
-  };
-}, [saleData.items]);
+    fetchStoreInventoryMapping();
+  }, [user]);
 
-  // Fetch stores and salespeople on component mount
+  // Fetch stores on component mount
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
@@ -147,6 +92,112 @@ useEffect(() => {
     fetchInitialData();
   }, [user]);
 
+  // Search for products based on input in product fields
+  useEffect(() => {
+    const debouncedSearch = async (index, field, value) => {
+      if (preventSearch[index] || !storeInventoryCollection) {
+        return;
+      }
+    
+      if (!value || value.length < 3) {
+        setSearchResults(prev => {
+          const newResults = { ...prev };
+          delete newResults[index];
+          return newResults;
+        });
+        return;
+      }
+    
+      try {
+        setSearchLoading(prev => ({ ...prev, [index]: true }));
+        
+        // First, query the inventory collection
+        const inventoryResponse = await api.get('/inventory', {
+          params: {
+            collection: storeInventoryCollection,
+            search: value
+          }
+        });
+        
+        if (inventoryResponse.data.items?.length > 0) {
+          // Get matching products using the inventory item codes
+          const matchingProducts = [];
+          
+          for (const item of inventoryResponse.data.items) {
+            try {
+              // Search by itemCode to get the full product details
+              const productResponse = await api.get(`/products/barcode/${item.itemCode}`);
+              matchingProducts.push({
+                ...productResponse.data,
+                quantity: item.quantity, // Include the available quantity
+                _id: productResponse.data._id
+              });
+            } catch (err) {
+              console.error(`Error fetching product details for ${item.itemCode}:`, err);
+            }
+          }
+          
+          // Filter results based on the search field
+          let finalResults = matchingProducts;
+          if (field === 'itemCode') {
+            finalResults = matchingProducts.filter(p => 
+              p.itemCode.toLowerCase().includes(value.toLowerCase())
+            );
+          } else if (field === 'name') {
+            finalResults = matchingProducts.filter(p => 
+              p.name.toLowerCase().includes(value.toLowerCase())
+            );
+          } else if (field === 'variantName') {
+            finalResults = matchingProducts.filter(p => 
+              p.variantName && p.variantName.toLowerCase().includes(value.toLowerCase())
+            );
+          }
+          
+          setSearchResults(prev => ({ ...prev, [index]: finalResults }));
+        } else {
+          setSearchResults(prev => {
+            const newResults = { ...prev };
+            delete newResults[index];
+            return newResults;
+          });
+        }
+      } catch (err) {
+        console.error('Search failed:', err);
+        setError('Failed to search products');
+      } finally {
+        setSearchLoading(prev => ({ ...prev, [index]: false }));
+      }
+    };
+
+    const timeouts = {};
+
+    saleData.items.forEach((item, index) => {
+      // Only check product code and name fields
+      const codeLength = item.productDetails?.itemCode?.length || 0;
+      const nameLength = item.productDetails?.name?.length || 0;
+      const variantLength = item.productDetails?.variantName?.length || 0;
+
+      // Only proceed if any field has 3+ characters
+      if (codeLength >= 3 || nameLength >= 3 || variantLength >= 3) {
+        if (timeouts[index]) clearTimeout(timeouts[index]);
+        
+        timeouts[index] = setTimeout(() => {
+          if (codeLength >= 3) {
+            debouncedSearch(index, 'itemCode', item.productDetails.itemCode);
+          } else if (nameLength >= 3) {
+            debouncedSearch(index, 'name', item.productDetails.name);
+          } else if (variantLength >= 3) {
+            debouncedSearch(index, 'variantName', item.productDetails.variantName);
+          }
+        }, 300);
+      }
+    });
+
+    return () => {
+      Object.values(timeouts).forEach(timeout => clearTimeout(timeout));
+    };
+  }, [saleData.items, preventSearch, storeInventoryCollection]);
+
   const handleDataChange = (e) => {
     const { name, value } = e.target;
     setSaleData(prev => ({
@@ -156,10 +207,16 @@ useEffect(() => {
   };
 
   const handleAddProduct = (product) => {
+    // Check if there's inventory available
+    if (product.quantity <= 0) {
+      setError(`${product.name} ${product.variantName ? `(${product.variantName})` : ''} is out of stock at this store`);
+      return;
+    }
+
     setSaleData(prev => ({
       ...prev,
       items: [...prev.items, {
-        product: product._id,  // You were setting this to empty string
+        product: product._id,
         productDetails: {
           itemCode: product.itemCode,
           name: product.name,
@@ -169,41 +226,20 @@ useEffect(() => {
           subcategory: product.subcategory
         },
         quantity: 1,
-        price: product.price  // You were setting this to empty string
+        price: product.price,
+        availableQuantity: product.quantity // Store the available quantity for reference
       }]
     }));
     setShowProductSearch(false);
   };
 
-  const handleProductSearch = async (index, searchTerm, searchField) => {
-    try {
-      setSearchLoading(prev => ({ ...prev, [index]: true }));
-      const results = await searchProducts(searchTerm);
-      
-      // Auto-select if searching by code and exactly one product is found
-      if (searchField === 'itemCode' && results.products?.length === 1) {
-        const product = results.products[0];
-        handleProductSelect(index, product, searchField);
-        return;
-      }
-      
-      // Filter results based on the current variant if searching by name
-      if (searchField === 'name' && item.productDetails.variantName) {
-        results.products = results.products.filter(p => 
-          p.variantName === item.productDetails.variantName
-        );
-      }
-      
-      setSearchResults(prev => ({ ...prev, [index]: results.products }));
-    } catch (err) {
-      console.error('Search failed:', err);
-      setError('Failed to search products');
-    } finally {
-      setSearchLoading(prev => ({ ...prev, [index]: false }));
-    }
-  };
-
   const handleProductSelect = (index, product, searchField = 'name') => {
+    // Check if there's inventory available
+    if (product.quantity <= 0) {
+      setError(`${product.name} ${product.variantName ? `(${product.variantName})` : ''} is out of stock at this store`);
+      return;
+    }
+
     setPreventSearch(prev => ({ ...prev, [index]: true }));
     
     setSaleData(prev => {
@@ -224,7 +260,9 @@ useEffect(() => {
           isCodeLocked: searchField === 'name' || searchField === 'variantName',
           isNameLocked: searchField === 'itemCode',
           isVariantLocked: searchField === 'itemCode'
-        }
+        },
+        price: product.price,
+        availableQuantity: product.quantity
       };
   
       return { ...prev, items: newItems };
@@ -272,6 +310,14 @@ useEffect(() => {
         }
       } else {
         newItems[index][field] = value;
+        
+        // Validate quantity against available inventory
+        if (field === 'quantity' && newItems[index].availableQuantity !== undefined) {
+          if (value > newItems[index].availableQuantity) {
+            setError(`Only ${newItems[index].availableQuantity} ${newItems[index].productDetails.name} available in stock`);
+            newItems[index][field] = newItems[index].availableQuantity;
+          }
+        }
       }
       return { ...prev, items: newItems };
     });
@@ -289,10 +335,16 @@ useEffect(() => {
   const handleQuantityChange = (index, quantity) => {
     setSaleData(prev => {
       const newItems = [...prev.items];
-      newItems[index] = {
-        ...newItems[index],
-        quantity: Number(quantity),
-      };
+      const availableQty = newItems[index].availableQuantity;
+      
+      // Validate against available inventory
+      if (availableQty !== undefined && quantity > availableQty) {
+        setError(`Only ${availableQty} ${newItems[index].productDetails.name} available in stock`);
+        newItems[index].quantity = availableQty;
+      } else {
+        newItems[index].quantity = Number(quantity);
+      }
+      
       return { ...prev, items: newItems };
     });
   };
@@ -374,6 +426,12 @@ useEffect(() => {
         if (!item.product || !item.quantity || !item.price) {
           throw new Error('Invalid product data');
         }
+        
+        // Validate quantity against available inventory
+        if (item.availableQuantity !== undefined && item.quantity > item.availableQuantity) {
+          throw new Error(`Only ${item.availableQuantity} ${item.productDetails.name} available in stock`);
+        }
+        
         return {
           product: item.product,
           quantity: item.quantity,
@@ -410,7 +468,7 @@ useEffect(() => {
   
       setSuccess('Sale recorded successfully!');
       setSaleData({
-        storeId: '',
+        storeId: storeId,
         customerName: '',
         date: new Date().toISOString().split('T')[0],
         items: [],
@@ -428,20 +486,31 @@ useEffect(() => {
     }
   };
 
-const handleSuccess = (response) => {
-  setSuccess('Sale recorded successfully!');
-  setSaleData({
-    storeId: '',
-    customerName: '',
-    date: new Date().toISOString().split('T')[0],
-    items: [],
-    billPhoto: null
-  });
-  
-  setTimeout(() => {
-    navigate(`/sales/${response._id}`);
-  }, 3000);
-};
+  // Function to render stock status chip
+  const renderStockStatus = (item) => {
+    if (!item.availableQuantity && item.availableQuantity !== 0) return null;
+    
+    let color, label;
+    if (item.availableQuantity <= 0) {
+      color = "error";
+      label = "Out of Stock";
+    } else if (item.availableQuantity < 5) {
+      color = "warning";
+      label = "Low Stock";
+    } else {
+      color = "success";
+      label = "In Stock";
+    }
+    
+    return (
+      <Chip 
+        size="small" 
+        color={color} 
+        label={`${label} (${item.availableQuantity})`} 
+        sx={{ ml: 1 }}
+      />
+    );
+  };
 
   return (
     <Paper elevation={2} sx={{ maxWidth: '600px', mx: 'auto', mt: 2, mb: 4 }}>
@@ -455,36 +524,34 @@ const handleSuccess = (response) => {
         {/* Sale Details Section */}
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <TextField
-              select
-              fullWidth
-              label="Store *"
-              name="storeId"
-              value={user.role === 'admin' ? saleData.storeId : user.store._id}
-              onChange={handleDataChange}
-              required
-              SelectProps={{
-                native: true,
-              }}
-              disabled={user.role !== 'admin'} // Disable for non-admin users
-            >
-              <option value="">Select Store</option>
-              {user.role === 'admin' ? (
-                // Show all stores for admin
-                stores.map(store => (
-                  <option key={store._id} value={store._id}>
-                    {store.name}
-                  </option>
-                ))
-              ) : (
-                // Show only user's store for non-admin
-                <option value={user.store._id}>
-                  {user.store.name}
+            select
+            fullWidth
+            label="Store *"
+            name="storeId"
+            value={user.role === 'admin' ? saleData.storeId : user.store._id}
+            onChange={handleDataChange}
+            required
+            SelectProps={{
+              native: true,
+            }}
+            disabled={user.role !== 'admin'} // Disable for non-admin users
+          >
+            <option value="">Select Store</option>
+            {user.role === 'admin' ? (
+              // Show all stores for admin
+              stores.map(store => (
+                <option key={store._id} value={store._id}>
+                  {store.name}
                 </option>
-              )}
-            </TextField>
-  
+              ))
+            ) : (
+              // Show only user's store for non-admin
+              <option value={user.store._id}>
+                {user.store.name}
+              </option>
+            )}
+          </TextField>
 
-  
           <TextField
             fullWidth
             label="Customer Name"
@@ -536,222 +603,284 @@ const handleSuccess = (response) => {
         </Box>
   
         {/* Products Section */}
-        <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h6">Products</Typography>
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<AddIcon />}
-          onClick={() => {
-            setSaleData(prev => ({
-              ...prev,
-              items: [...prev.items, {
-                product: '',
-                productDetails: { itemCode: '', name: '' },
-                quantity: 1,
-                price: ''
-              }]
-            }));
-          }}
-        >
-          Add
-        </Button>
-      </Box>
+        
+<Box>
+  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+    <Typography variant="h6">Products</Typography>
+    <Button
+      variant="contained"
+      color="primary"
+      startIcon={<AddIcon />}
+      onClick={() => {
+        setSaleData(prev => ({
+          ...prev,
+          items: [...prev.items, {
+            product: '',
+            productDetails: { itemCode: '', name: '' },
+            quantity: 1,
+            price: ''
+          }]
+        }));
+      }}
+    >
+      Add
+    </Button>
+  </Box>
 
-  
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {saleData.items.map((item, index) => (
-          <Card key={index} variant="outlined">
-            <CardContent>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-                <Typography variant="subtitle1" fontWeight="medium">
-                  Item {index + 1}
-                </Typography>
-                <IconButton 
-                  color="error" 
-                  onClick={() => handleRemoveItem(index)}
-                  size="small"
+  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+    {saleData.items.map((item, index) => (
+      <Card key={index} variant="outlined">
+        <CardContent>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+            <Typography variant="subtitle1" fontWeight="medium">
+              Item {index + 1}
+            </Typography>
+            <IconButton 
+              color="error" 
+              onClick={() => handleRemoveItem(index)}
+              size="small"
+            >
+              <DeleteIcon />
+            </IconButton>
+          </Box>
+
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {/* Product Code */}
+            <TextField
+              label="Product Code *"
+              value={item.productDetails.itemCode || ''}
+              onChange={(e) => {
+                if (item.productDetails.isCodeLocked) return;
+                handleProductChange(index, 'productDetails.itemCode', e.target.value);
+              }}
+              placeholder="Enter code"
+              fullWidth
+              disabled={item.productDetails.isCodeLocked}
+              InputProps={{
+                endAdornment: (
+                  <IconButton 
+                    size="small" 
+                    sx={{ bgcolor: 'primary.50' }}
+                    onClick={() => {
+                      if (!storeInventoryCollection) {
+                        setError('No inventory mapping found for your store');
+                        return;
+                      }
+                      // Search by code in the specific store inventory
+                      if (item.productDetails.itemCode?.length >= 3) {
+                        setSearchLoading(prev => ({ ...prev, [index]: true }));
+                        api.get('/inventory', {
+                          params: {
+                            collection: storeInventoryCollection,
+                            search: item.productDetails.itemCode
+                          }
+                        })
+                        .then(response => {
+                          if (response.data.items?.length > 0) {
+                            // Find exact match for item code
+                            const exactMatch = response.data.items.find(i => 
+                              i.itemCode === item.productDetails.itemCode
+                            );
+                            
+                            if (exactMatch) {
+                              // Get full product details
+                              api.get(`/products/barcode/${exactMatch.itemCode}`)
+                                .then(productResponse => {
+                                  handleProductSelect(
+                                    index, 
+                                    {
+                                      ...productResponse.data,
+                                      quantity: exactMatch.quantity
+                                    }, 
+                                    'itemCode'
+                                  );
+                                })
+                                .catch(err => {
+                                  console.error('Error fetching product:', err);
+                                  setError('Error fetching product details');
+                                })
+                                .finally(() => {
+                                  setSearchLoading(prev => ({ ...prev, [index]: false }));
+                                });
+                            } else {
+                              setSearchLoading(prev => ({ ...prev, [index]: false }));
+                            }
+                          } else {
+                            setSearchLoading(prev => ({ ...prev, [index]: false }));
+                            setError(`No product with code ${item.productDetails.itemCode} found in this store's inventory`);
+                          }
+                        })
+                        .catch(err => {
+                          console.error('Error searching inventory:', err);
+                          setError('Error searching inventory');
+                          setSearchLoading(prev => ({ ...prev, [index]: false }));
+                        });
+                      }
+                    }}
+                    disabled={!item.productDetails.itemCode || searchLoading[index] || !storeInventoryCollection}
+                  >
+                    {searchLoading[index] ? (
+                      <CircularProgress size={20} />
+                    ) : (
+                      <ScanIcon />
+                    )}
+                  </IconButton>
+                ),
+              }}
+            />
+
+            {/* Product Name */}
+            <TextField
+              label="Product Name *"
+              value={item.productDetails.name || ''}
+              onChange={(e) => {
+                if (item.productDetails.isNameLocked) return;
+                handleProductChange(index, 'productDetails.name', e.target.value);
+              }}
+              placeholder="Enter product name"
+              fullWidth
+              disabled={item.productDetails.isNameLocked}
+              InputProps={{
+                endAdornment: (
+                  <IconButton 
+                    size="small"
+                    onClick={() => {
+                      if (!storeInventoryCollection) {
+                        setError('No inventory mapping found for your store');
+                        return;
+                      }
+                    }}
+                    disabled={!item.productDetails.name || searchLoading[index] || !storeInventoryCollection}
+                  >
+                    {searchLoading[index] ? (
+                      <CircularProgress size={20} />
+                    ) : (
+                      <SearchIcon />
+                    )}
+                  </IconButton>
+                ),
+              }}
+            />
+
+            {/* Variant Name */}
+            <TextField
+              label="Variant Name"
+              value={item.productDetails.variantName || ''}
+              onChange={(e) => {
+                if (item.productDetails.isVariantLocked) return;
+                handleProductChange(index, 'productDetails.variantName', e.target.value);
+              }}
+              placeholder="Enter variant name"
+              fullWidth
+              disabled={item.productDetails.isVariantLocked}
+            />
+          
+            {/* Search Results Dropdown */}
+            {searchResults[index] && Array.isArray(searchResults[index]) && searchResults[index].length > 0 && (
+              <Box sx={{ position: 'relative' }}>
+                <Paper 
+                  elevation={3} 
+                  sx={{ 
+                    position: 'absolute',
+                    zIndex: 1000,
+                    width: '100%',
+                    maxHeight: '200px',
+                    overflow: 'auto',
+                    mt: 1,
+                    backgroundColor: 'white',
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    top: '100%',
+                    left: 0,
+                    right: 0
+                  }}
                 >
-                  <DeleteIcon />
-                </IconButton>
+                  {searchResults[index].map((product) => (
+                    <Box
+                      key={product._id}
+                      sx={{
+                        p: 2,
+                        cursor: product.quantity > 0 ? 'pointer' : 'not-allowed',
+                        opacity: product.quantity > 0 ? 1 : 0.6,
+                        '&:hover': { 
+                          bgcolor: product.quantity > 0 ? 'action.hover' : 'inherit',
+                          transition: 'all 0.2s'
+                        },
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                        '&:last-child': {
+                          borderBottom: 'none'
+                        }
+                      }}
+                      onClick={() => {
+                        if (product.quantity > 0) {
+                          handleProductSelect(
+                            index, 
+                            product, 
+                            item.productDetails.name?.length >= 3 ? 'name' : 
+                            item.productDetails.variantName?.length >= 3 ? 'variantName' : 
+                            'itemCode'
+                          );
+                        } else {
+                          setError(`${product.name} (${product.variantName || ''}) is out of stock`);
+                        }
+                      }}
+                    >
+                      <Typography variant="body1" fontWeight="medium">
+                        {item.productDetails.name?.length >= 3 ? product.name :
+                        item.productDetails.variantName?.length >= 3 ? product.variantName :
+                        product.itemCode}
+                      </Typography>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Typography variant="caption" color="text.secondary">
+                          {product.name}
+                          {product.variantName && ` - ${product.variantName}`}
+                          {` (${product.itemCode})`}
+                        </Typography>
+                        <Chip 
+                          size="small" 
+                          color={product.quantity <= 0 ? "error" : product.quantity < 5 ? "warning" : "success"} 
+                          label={product.quantity <= 0 ? "Out of Stock" : product.quantity < 5 ? `Low Stock (${product.quantity})` : `In Stock (${product.quantity})`} 
+                        />
+                      </Box>
+                      <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', mt: 0.5 }}>
+                        {[product.department, product.category, product.subcategory]
+                          .filter(Boolean)
+                          .join(' > ')}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Paper>
               </Box>
-
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {/* Product Code with Scanner */}
-        {/* Product Code */}
-        <TextField
-          label="Product Code *"
-          value={item.productDetails.itemCode || ''}
-          onChange={(e) => {
-            if (item.productDetails.isCodeLocked) return;
-            handleProductChange(index, 'productDetails.itemCode', e.target.value);
-          }}
-          placeholder="Enter code"
-          fullWidth
-          disabled={item.productDetails.isCodeLocked}
-          InputProps={{
-            endAdornment: (
-              <IconButton 
-                size="small" 
-                sx={{ bgcolor: 'primary.50' }}
-                onClick={() => handleProductSearch(index, item.productDetails.itemCode, 'itemCode')}
-                disabled={!item.productDetails.itemCode || searchLoading[index]}
-              >
-                {searchLoading[index] ? (
-                  <CircularProgress size={20} />
-                ) : (
-                  <ScanIcon />
-                )}
-              </IconButton>
-            ),
-          }}
-        />
-
-        {/* Product Name */}
-        <TextField
-          label="Product Name *"
-          value={item.productDetails.name || ''}
-          onChange={(e) => {
-            if (item.productDetails.isNameLocked) return;
-            handleProductChange(index, 'productDetails.name', e.target.value);
-          }}
-          placeholder="Enter product name"
-          fullWidth
-          disabled={item.productDetails.isNameLocked}
-          InputProps={{
-            endAdornment: (
-              <IconButton 
-                size="small"
-                onClick={() => handleProductSearch(index, item.productDetails.name, 'name')}
-                disabled={!item.productDetails.name || searchLoading[index]}
-              >
-                {searchLoading[index] ? (
-                  <CircularProgress size={20} />
-                ) : (
-                  <SearchIcon />
-                )}
-              </IconButton>
-            ),
-          }}
-        />
-
-        {/* Variant Name - New Field */}
-        <TextField
-          label="Variant Name"
-          value={item.productDetails.variantName || ''}
-          onChange={(e) => {
-            if (item.productDetails.isVariantLocked) return;
-            handleProductChange(index, 'productDetails.variantName', e.target.value);
-          }}
-          placeholder="Enter variant name"
-          fullWidth
-          disabled={item.productDetails.isVariantLocked}
-          InputProps={{
-            endAdornment: (
-              <IconButton 
-                size="small"
-                onClick={() => handleProductSearch(index, item.productDetails.variantName, 'variantName')}
-                disabled={!item.productDetails.variantName || searchLoading[index]}
-              >
-                {searchLoading[index] ? (
-                  <CircularProgress size={20} />
-                ) : (
-                  <SearchIcon />
-                )}
-              </IconButton>
-            ),
-          }}
-        />
-    
-        {/* Search Results Dropdown - Move outside of specific fields so it works for both */}
-        {/* Search Results Dropdown - Move outside of specific fields so it works for both */}
-        {searchResults[index] && Array.isArray(searchResults[index]) && searchResults[index].length > 0 && (
-        <Box sx={{ position: 'relative' }}>
-          <Paper 
-            elevation={3} 
-            sx={{ 
-              position: 'absolute',
-              zIndex: 1000,
-              width: '100%',
-              maxHeight: '200px',
-              overflow: 'auto',
-              mt: 1,
-              backgroundColor: 'white',
-              border: '1px solid',
-              borderColor: 'divider',
-              top: '100%',
-              left: 0,
-              right: 0
-            }}
-          >
-            {searchResults[index].map((product) => (
-              <Box
-                key={product._id}
-                sx={{
-                  p: 2,
-                  cursor: 'pointer',
-                  '&:hover': { 
-                    bgcolor: 'action.hover',
-                    transition: 'all 0.2s'
-                  },
-                  borderBottom: '1px solid',
-                  borderColor: 'divider',
-                  '&:last-child': {
-                    borderBottom: 'none'
-                  }
-                }}
-                onClick={() => handleProductSelect(
-                  index, 
-                  product, 
-                  item.productDetails.name?.length >= 3 ? 'name' : 
-                  item.productDetails.variantName?.length >= 3 ? 'variantName' : 
-                  'itemCode'
-                )}
-              >
-                <Typography variant="body1" fontWeight="medium">
-                  {item.productDetails.name?.length >= 3 ? product.name :
-                  item.productDetails.variantName?.length >= 3 ? product.variantName :
-                  product.itemCode}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {product.name}
-                  {product.variantName && ` - ${product.variantName}`}
-                  {` (${product.itemCode})`}
-                </Typography>
-                {/* Display additional product information */}
-                <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', mt: 0.5 }}>
-                  {[product.department, product.category, product.subcategory]
-                    .filter(Boolean)
-                    .join(' > ')}
-                </Typography>
-              </Box>
-            ))}
-          </Paper>
-        </Box>
-      )}
+            )}
 
             {/* Quantity and Price in same row */}
             <Box sx={{ display: 'flex', gap: 2 }}>
-    <TextField
-      label="Quantity"
-      type="number"
-      value={item.quantity}
-      onChange={(e) => handleProductChange(index, 'quantity', Number(e.target.value))}
-      InputProps={{ inputProps: { min: 1 } }}
-      sx={{ flex: 1 }}
-    />
+              <TextField
+                label="Quantity"
+                type="number"
+                value={item.quantity}
+                onChange={(e) => handleQuantityChange(index, Number(e.target.value))}
+                InputProps={{ 
+                  inputProps: { 
+                    min: 1,
+                    max: item.availableQuantity 
+                  }
+                }}
+                sx={{ flex: 1 }}
+                helperText={item.availableQuantity !== undefined ? `Available: ${item.availableQuantity}` : ""}
+              />
 
-    <TextField
-      label="Price *"
-      type="number"
-      value={item.price || ''}
-      onChange={(e) => handleProductChange(index, 'price', Number(e.target.value))}
-      InputProps={{ inputProps: { min: 0 } }}
-      sx={{ flex: 1 }}
-    />
-  </Box>
-</Box>
+              <TextField
+                label="Price *"
+                type="number"
+                value={item.price || ''}
+                onChange={(e) => handleProductChange(index, 'price', Number(e.target.value))}
+                InputProps={{ inputProps: { min: 0 } }}
+                sx={{ flex: 1 }}
+              />
+            </Box>
+          </Box>
         </CardContent>
       </Card>
     ))}
@@ -761,8 +890,26 @@ const handleSuccess = (response) => {
         <Typography>No products added yet</Typography>
       </Box>
     )}
-  </Box>
-</Box>
+
+            {/* Total Amount */}
+            {saleData.items.length > 0 && (
+              <Box sx={{ 
+                mt: 2, 
+                p: 2, 
+                backgroundColor: '#f0f7ff', 
+                borderRadius: '8px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                fontWeight: 'bold'
+              }}>
+                <Typography variant="h6">Total:</Typography>
+                <Typography variant="h6">₹{calculateTotal()}</Typography>
+              </Box>
+            )}
+          </Box>
+        </Box>
+
         {/* Status Messages */}
         {error && (
           <Alert severity="error" sx={{ mt: 2 }}>
@@ -790,8 +937,16 @@ const handleSuccess = (response) => {
         </Button>
       </Box>
   
+      {/* Product Search Modal */}
+      {showProductSearch && (
+        <ProductSearch
+          onProductSelect={handleAddProduct}
+          onClose={() => setShowProductSearch(false)}
+          storeInventoryCollection={storeInventoryCollection}
+        />
+      )}
     </Paper>
-    );
-  };
+  );
+};
 
 export default NewSalePage;
