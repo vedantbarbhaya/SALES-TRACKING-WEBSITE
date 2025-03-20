@@ -60,16 +60,23 @@ const NewSalePage = () => {
     const fetchStoreInventoryMapping = async () => {
       try {
         if (user?.store?._id) {
+          console.log('Fetching mapping for store ID:', user.store._id);
           const mapping = await getMappingByStore(user.store._id);
+          console.log('Mapping response:', mapping);
+          
+          if (!mapping || !mapping.inventoryCollection) {
+            throw new Error('No inventory collection found for this store');
+          }
+          
           setStoreInventoryCollection(mapping.inventoryCollection);
-          console.log('Store inventory collection:', mapping.inventoryCollection);
+          console.log('Store inventory collection set to:', mapping.inventoryCollection);
         }
       } catch (err) {
         console.error('Error fetching store inventory mapping:', err);
         setError('No inventory mapping found for your store. Please contact an administrator.');
       }
     };
-
+  
     fetchStoreInventoryMapping();
   }, [user]);
 
@@ -94,107 +101,128 @@ const NewSalePage = () => {
 
   // Search for products based on input in product fields
   useEffect(() => {
-    const debouncedSearch = async (index, field, value) => {
-      if (preventSearch[index] || !storeInventoryCollection) {
-        return;
-      }
+    // Create a global object to track timeouts if it doesn't exist
+    if (!window.searchTimeouts) {
+      window.searchTimeouts = {};
+    }
     
-      if (!value || value.length < 3) {
-        setSearchResults(prev => {
-          const newResults = { ...prev };
-          delete newResults[index];
-          return newResults;
-        });
+    // Create a debounced search function for each product field
+    const debouncedSearch = async (index, searchTerm) => {
+      // Don't search if term is too short or search is prevented
+      if (!searchTerm || searchTerm.length < 3 || preventSearch[index] || !storeInventoryCollection) {
         return;
       }
     
       try {
+        console.log(`Searching for '${searchTerm}' in collection: ${storeInventoryCollection}`);
         setSearchLoading(prev => ({ ...prev, [index]: true }));
         
-        // First, query the inventory collection
-        const inventoryResponse = await api.get('/inventory', {
+        // Make the API request
+        const response = await api.get('/inventory', {
           params: {
             collection: storeInventoryCollection,
-            search: value
+            search: searchTerm
           }
         });
         
-        if (inventoryResponse.data.items?.length > 0) {
-          // Get matching products using the inventory item codes
-          const matchingProducts = [];
+        console.log('Search response:', response.data);
+        
+        // Determine if response has items directly or in a nested property
+        const items = response.data?.items || response.data;
+        
+        if (items && Array.isArray(items) && items.length > 0) {
+          // Convert inventory items directly to products
+          // WITHOUT making additional API calls that are failing
+          const products = items.map(item => ({
+            _id: item._id,
+            itemCode: item.itemCode,
+            name: item.name,
+            variantName: item.variantName || '',
+            department: item.department || '',
+            category: item.category || '',
+            subcategory: item.subcategory || '',
+            price: item.price || 0,
+            quantity: item.quantity || 0,
+            availableQuantity: item.quantity || 0
+          }));
           
-          for (const item of inventoryResponse.data.items) {
-            try {
-              // Search by itemCode to get the full product details
-              const productResponse = await api.get(`/products/barcode/${item.itemCode}`);
-              matchingProducts.push({
-                ...productResponse.data,
-                quantity: item.quantity, // Include the available quantity
-                _id: productResponse.data._id
-              });
-            } catch (err) {
-              console.error(`Error fetching product details for ${item.itemCode}:`, err);
-            }
+          console.log('Processed products:', products);
+          
+          // Set the search results
+          if (products.length > 0) {
+            setSearchResults(prev => ({ ...prev, [index]: products }));
+          } else {
+            // Clear results if no products were found
+            setSearchResults(prev => {
+              const newResults = { ...prev };
+              delete newResults[index];
+              return newResults;
+            });
           }
-          
-          // Filter results based on the search field
-          let finalResults = matchingProducts;
-          if (field === 'itemCode') {
-            finalResults = matchingProducts.filter(p => 
-              p.itemCode.toLowerCase().includes(value.toLowerCase())
-            );
-          } else if (field === 'name') {
-            finalResults = matchingProducts.filter(p => 
-              p.name.toLowerCase().includes(value.toLowerCase())
-            );
-          } else if (field === 'variantName') {
-            finalResults = matchingProducts.filter(p => 
-              p.variantName && p.variantName.toLowerCase().includes(value.toLowerCase())
-            );
-          }
-          
-          setSearchResults(prev => ({ ...prev, [index]: finalResults }));
         } else {
+          // Clear results if API returned no items
           setSearchResults(prev => {
             const newResults = { ...prev };
             delete newResults[index];
             return newResults;
           });
+          console.log('No results found in the response');
         }
       } catch (err) {
-        console.error('Search failed:', err);
-        setError('Failed to search products');
+        console.error('Error searching products:', err);
+        
+        // Show a specific error message
+        setError(`Error searching for products: ${err.response?.data?.message || err.message}`);
+        
+        // Clear results on error
+        setSearchResults(prev => {
+          const newResults = { ...prev };
+          delete newResults[index];
+          return newResults;
+        });
       } finally {
         setSearchLoading(prev => ({ ...prev, [index]: false }));
       }
     };
-
-    const timeouts = {};
-
+  
+    // Check each product item for search terms
     saleData.items.forEach((item, index) => {
-      // Only check product code and name fields
-      const codeLength = item.productDetails?.itemCode?.length || 0;
-      const nameLength = item.productDetails?.name?.length || 0;
-      const variantLength = item.productDetails?.variantName?.length || 0;
-
-      // Only proceed if any field has 3+ characters
-      if (codeLength >= 3 || nameLength >= 3 || variantLength >= 3) {
-        if (timeouts[index]) clearTimeout(timeouts[index]);
-        
-        timeouts[index] = setTimeout(() => {
-          if (codeLength >= 3) {
-            debouncedSearch(index, 'itemCode', item.productDetails.itemCode);
-          } else if (nameLength >= 3) {
-            debouncedSearch(index, 'name', item.productDetails.name);
-          } else if (variantLength >= 3) {
-            debouncedSearch(index, 'variantName', item.productDetails.variantName);
-          }
-        }, 300);
+      // Clear any existing timeout for this index
+      if (window.searchTimeouts[index]) {
+        clearTimeout(window.searchTimeouts[index]);
+        delete window.searchTimeouts[index];
+      }
+      
+      // Don't search if this item has search prevention active
+      if (preventSearch[index]) {
+        return;
+      }
+      
+      // Get search term - prioritize itemCode if it exists and is long enough
+      let searchTerm = null;
+      if (item.productDetails?.itemCode?.length >= 3) {
+        searchTerm = item.productDetails.itemCode;
+      } else if (item.productDetails?.name?.length >= 3) {
+        searchTerm = item.productDetails.name;
+      } else if (item.productDetails?.variantName?.length >= 3) {
+        searchTerm = item.productDetails.variantName;
+      }
+      
+      // If we have a search term, set a timeout to perform the search
+      if (searchTerm) {
+        window.searchTimeouts[index] = setTimeout(() => {
+          debouncedSearch(index, searchTerm);
+        }, 500); // 500ms debounce
       }
     });
-
+  
+    // Cleanup timeouts on unmount
     return () => {
-      Object.values(timeouts).forEach(timeout => clearTimeout(timeout));
+      if (window.searchTimeouts) {
+        Object.values(window.searchTimeouts).forEach(timeout => {
+          if (timeout) clearTimeout(timeout);
+        });
+      }
     };
   }, [saleData.items, preventSearch, storeInventoryCollection]);
 
@@ -234,14 +262,24 @@ const NewSalePage = () => {
   };
 
   const handleProductSelect = (index, product, searchField = 'name') => {
+    console.log(`Selecting product at index ${index}:`, product);
+    
     // Check if there's inventory available
     if (product.quantity <= 0) {
       setError(`${product.name} ${product.variantName ? `(${product.variantName})` : ''} is out of stock at this store`);
       return;
     }
-
+  
+    // Prevent additional searches
     setPreventSearch(prev => ({ ...prev, [index]: true }));
     
+    // Clear any existing timeouts for this index
+    if (window.searchTimeouts && window.searchTimeouts[index]) {
+      clearTimeout(window.searchTimeouts[index]);
+      delete window.searchTimeouts[index];
+    }
+    
+    // Update the form data with the selected product
     setSaleData(prev => {
       const newItems = [...prev.items];
       const existingItem = newItems[index] || {};
@@ -252,85 +290,208 @@ const NewSalePage = () => {
         productDetails: {
           itemCode: product.itemCode,
           name: product.name,
-          variantName: product.variantName,
-          department: product.department,
-          category: product.category,
-          subcategory: product.subcategory,
-          // Lock fields based on search type
-          isCodeLocked: searchField === 'name' || searchField === 'variantName',
-          isNameLocked: searchField === 'itemCode',
-          isVariantLocked: searchField === 'itemCode'
+          variantName: product.variantName || '',
+          department: product.department || '',
+          category: product.category || '',
+          subcategory: product.subcategory || '',
+          // Only lock name and variant fields, not itemCode
+          isCodeLocked: false, // Keep code editable
+          isNameLocked: true,  // Lock name
+          isVariantLocked: true // Lock variant
         },
         price: product.price,
-        availableQuantity: product.quantity
+        quantity: 1,
+        availableQuantity: product.quantity || product.availableQuantity
       };
   
       return { ...prev, items: newItems };
     });
   
+    // Clear search results
     setSearchResults(prev => {
       const newResults = { ...prev };
       delete newResults[index];
       return newResults;
     });
-  
-    setTimeout(() => {
-      setPreventSearch(prev => {
-        const newPrevent = { ...prev };
-        delete newPrevent[index];
-        return newPrevent;
-      });
-    }, 500);
+    
+    // Note: We deliberately DON'T re-enable search here
+    // Search will only be re-enabled when the user explicitly edits a field
   };
-
-  const handleProductChange = (index, field, value) => {
-    setSaleData(prev => {
-      const newItems = [...prev.items];
-      if (field.includes('.')) {
-        // For nested fields like productDetails.itemCode
-        const [parent, child] = field.split('.');
-        newItems[index][parent] = {
-          ...newItems[index][parent],
-          [child]: value
-        };
   
-        // Reset locks and clear other field when value is emptied
-        if (!value) {
+
+const handleItemCodeSearch = async (index, itemCode) => {
+  if (!itemCode || itemCode.length < 3 || !storeInventoryCollection) {
+    return;
+  }
+
+  try {
+    setSearchLoading(prev => ({ ...prev, [index]: true }));
+    console.log(`Searching for item code: ${itemCode} in collection: ${storeInventoryCollection}`);
+
+    // Search in inventory collection
+    const inventoryResponse = await api.get('/inventory', {
+      params: {
+        collection: storeInventoryCollection,
+        search: itemCode
+      }
+    });
+
+    console.log('Inventory search response:', inventoryResponse.data);
+
+    // Get items array from response
+    const items = inventoryResponse.data?.items || inventoryResponse.data;
+
+    // Check if we got results
+    if (items && Array.isArray(items) && items.length > 0) {
+      // Find exact match for item code
+      const exactMatch = items.find(i => 
+        i.itemCode.toLowerCase() === itemCode.toLowerCase()
+      );
+
+      if (exactMatch) {
+        console.log('Found exact match in inventory:', exactMatch);
+        
+        // Use inventory item directly instead of making another API call
+        const product = {
+          _id: exactMatch._id,
+          itemCode: exactMatch.itemCode,
+          name: exactMatch.name,
+          variantName: exactMatch.variantName || '',
+          department: exactMatch.department || '',
+          category: exactMatch.category || '',
+          subcategory: exactMatch.subcategory || '',
+          price: exactMatch.price || 0,
+          quantity: exactMatch.quantity || 0,
+          availableQuantity: exactMatch.quantity || 0
+        };
+        
+        // Set the product in the form
+        handleProductSelect(index, product, 'itemCode');
+      } else {
+        console.log('No exact match found, showing search results dropdown');
+        // If no exact match, process all results for the dropdown
+        const products = items.map(item => ({
+          _id: item._id,
+          itemCode: item.itemCode,
+          name: item.name,
+          variantName: item.variantName || '',
+          department: item.department || '',
+          category: item.category || '',
+          subcategory: item.subcategory || '',
+          price: item.price || 0,
+          quantity: item.quantity || 0,
+          availableQuantity: item.quantity || 0
+        }));
+        
+        if (products.length > 0) {
+          setSearchResults(prev => ({ ...prev, [index]: products }));
+        } else {
+          setError(`No products found matching code: ${itemCode}`);
+        }
+      }
+    } else {
+      setError(`No product with code ${itemCode} found in this store's inventory`);
+    }
+  } catch (err) {
+    console.error('Search error:', err);
+    setError(`Error searching for product: ${err.response?.data?.message || err.message}`);
+  } finally {
+    setSearchLoading(prev => ({ ...prev, [index]: false }));
+  }
+};
+
+const handleProductChange = (index, field, value) => {
+  // Store the previous value for comparison
+  const prevValue = field.includes('.') ? 
+    saleData.items[index][field.split('.')[0]][field.split('.')[1]] : 
+    saleData.items[index][field];
+  
+  setSaleData(prev => {
+    const newItems = [...prev.items];
+    if (field.includes('.')) {
+      // For nested fields like productDetails.itemCode
+      const [parent, child] = field.split('.');
+      newItems[index][parent] = {
+        ...newItems[index][parent],
+        [child]: value
+      };
+
+      // Reset locks and clear other fields when value is emptied
+      if (!value) {
+        // If clearing the itemCode, reset ALL locks and clear ALL fields
+        if (child === 'itemCode') {
           newItems[index][parent] = {
             ...newItems[index][parent],
             isCodeLocked: false,
-            isNameLocked: false
+            isNameLocked: false,
+            isVariantLocked: false, // Also reset variant lock
+            name: '',              // Clear name
+            variantName: '',       // Clear variant name
+            department: '',        // Clear other fields too
+            category: '',
+            subcategory: ''
           };
-          // Clear the other field if this field is emptied
-          if (child === 'name') {
-            newItems[index][parent].itemCode = '';
-          } else if (child === 'itemCode') {
-            newItems[index][parent].name = '';
-          }
+        } 
+        // If clearing the name, reset some locks but not all
+        else if (child === 'name') {
+          newItems[index][parent] = {
+            ...newItems[index][parent],
+            isNameLocked: false,
+            itemCode: ''           // Clear itemCode
+          };
         }
-      } else {
-        newItems[index][field] = value;
-        
-        // Validate quantity against available inventory
-        if (field === 'quantity' && newItems[index].availableQuantity !== undefined) {
-          if (value > newItems[index].availableQuantity) {
-            setError(`Only ${newItems[index].availableQuantity} ${newItems[index].productDetails.name} available in stock`);
-            newItems[index][field] = newItems[index].availableQuantity;
-          }
+        // If clearing the variant, just unlock that field
+        else if (child === 'variantName') {
+          newItems[index][parent] = {
+            ...newItems[index][parent],
+            isVariantLocked: false
+          };
         }
       }
-      return { ...prev, items: newItems };
-    });
-  
-    // Clear search results when field is emptied
-    if (!value) {
-      setSearchResults(prev => {
-        const newResults = { ...prev };
-        delete newResults[index];
-        return newResults;
-      });
+    } else {
+      newItems[index][field] = value;
+      
+      // Validate quantity against available inventory
+      if (field === 'quantity' && newItems[index].availableQuantity !== undefined) {
+        if (value > newItems[index].availableQuantity) {
+          setError(`Only ${newItems[index].availableQuantity} ${newItems[index].productDetails.name} available in stock`);
+          newItems[index][field] = newItems[index].availableQuantity;
+        }
+      }
     }
-  };
+    return { ...prev, items: newItems };
+  });
+
+  // Clear search results and prevent search when field is emptied
+  if (!value) {
+    setSearchResults(prev => {
+      const newResults = { ...prev };
+      delete newResults[index];
+      return newResults;
+    });
+    
+    // When a field is emptied, ensure no search happens
+    setPreventSearch(prev => ({ ...prev, [index]: true }));
+    
+    // Clear any existing search timeouts for this index
+    if (window.searchTimeouts && window.searchTimeouts[index]) {
+      clearTimeout(window.searchTimeouts[index]);
+      delete window.searchTimeouts[index];
+    }
+  }
+  
+  // If we're changing from a value to another value (not emptying), 
+  // make sure to only show dropdown for deliberate user edits
+  if (value && prevValue && value !== prevValue) {
+    // This is an edit, not just a field being cleared
+    // Allow normal search behavior
+    setPreventSearch(prev => {
+      const newPrevent = { ...prev };
+      delete newPrevent[index];
+      return newPrevent;
+    });
+  }
+};
 
   const handleQuantityChange = (index, quantity) => {
     setSaleData(prev => {
@@ -400,7 +561,7 @@ const NewSalePage = () => {
 
   const calculateTotal = () => {
     return saleData.items.reduce((sum, item) => {
-      return sum + (item.price * item.quantity);
+      return sum + ((item.price || 0) * (item.quantity || 1));
     }, 0).toFixed(2);
   };
 
@@ -659,72 +820,17 @@ const NewSalePage = () => {
               InputProps={{
                 endAdornment: (
                   <IconButton 
-                    size="small" 
-                    sx={{ bgcolor: 'primary.50' }}
-                    onClick={() => {
-                      if (!storeInventoryCollection) {
-                        setError('No inventory mapping found for your store');
-                        return;
-                      }
-                      // Search by code in the specific store inventory
-                      if (item.productDetails.itemCode?.length >= 3) {
-                        setSearchLoading(prev => ({ ...prev, [index]: true }));
-                        api.get('/inventory', {
-                          params: {
-                            collection: storeInventoryCollection,
-                            search: item.productDetails.itemCode
-                          }
-                        })
-                        .then(response => {
-                          if (response.data.items?.length > 0) {
-                            // Find exact match for item code
-                            const exactMatch = response.data.items.find(i => 
-                              i.itemCode === item.productDetails.itemCode
-                            );
-                            
-                            if (exactMatch) {
-                              // Get full product details
-                              api.get(`/products/barcode/${exactMatch.itemCode}`)
-                                .then(productResponse => {
-                                  handleProductSelect(
-                                    index, 
-                                    {
-                                      ...productResponse.data,
-                                      quantity: exactMatch.quantity
-                                    }, 
-                                    'itemCode'
-                                  );
-                                })
-                                .catch(err => {
-                                  console.error('Error fetching product:', err);
-                                  setError('Error fetching product details');
-                                })
-                                .finally(() => {
-                                  setSearchLoading(prev => ({ ...prev, [index]: false }));
-                                });
-                            } else {
-                              setSearchLoading(prev => ({ ...prev, [index]: false }));
-                            }
-                          } else {
-                            setSearchLoading(prev => ({ ...prev, [index]: false }));
-                            setError(`No product with code ${item.productDetails.itemCode} found in this store's inventory`);
-                          }
-                        })
-                        .catch(err => {
-                          console.error('Error searching inventory:', err);
-                          setError('Error searching inventory');
-                          setSearchLoading(prev => ({ ...prev, [index]: false }));
-                        });
-                      }
-                    }}
-                    disabled={!item.productDetails.itemCode || searchLoading[index] || !storeInventoryCollection}
-                  >
-                    {searchLoading[index] ? (
-                      <CircularProgress size={20} />
-                    ) : (
-                      <ScanIcon />
-                    )}
-                  </IconButton>
+                      size="small" 
+                      sx={{ bgcolor: 'primary.50' }}
+                      onClick={() => handleItemCodeSearch(index, item.productDetails.itemCode)}
+                      disabled={!item.productDetails.itemCode || searchLoading[index] || !storeInventoryCollection}
+                    >
+                      {searchLoading[index] ? (
+                        <CircularProgress size={20} />
+                      ) : (
+                        <ScanIcon />
+                      )}
+                    </IconButton>
                 ),
               }}
             />
@@ -748,6 +854,13 @@ const NewSalePage = () => {
                       if (!storeInventoryCollection) {
                         setError('No inventory mapping found for your store');
                         return;
+                      }
+                      
+                      // Add actual search functionality here
+                      if (item.productDetails.name?.length >= 3) {
+                        handleItemCodeSearch(index, item.productDetails.name);
+                      } else {
+                        setError('Please enter at least 3 characters to search');
                       }
                     }}
                     disabled={!item.productDetails.name || searchLoading[index] || !storeInventoryCollection}
@@ -776,6 +889,7 @@ const NewSalePage = () => {
             />
           
             {/* Search Results Dropdown */}
+            {console.log('Search results for index', index, ':', searchResults[index])}
             {searchResults[index] && Array.isArray(searchResults[index]) && searchResults[index].length > 0 && (
               <Box sx={{ position: 'relative' }}>
                 <Paper 
@@ -814,6 +928,14 @@ const NewSalePage = () => {
                       }}
                       onClick={() => {
                         if (product.quantity > 0) {
+                          // Clear search results BEFORE calling handleProductSelect
+                          setSearchResults(prev => {
+                            const newResults = { ...prev };
+                            delete newResults[index];
+                            return newResults;
+                          });
+                          
+                          // Then handle the product selection
                           handleProductSelect(
                             index, 
                             product, 
