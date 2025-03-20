@@ -89,6 +89,8 @@ const getInventoryModelForStore = async (storeId) => {
 };
 
 // Reduce inventory quantities based on a sale
+// Reduce inventory quantities based on a sale
+// Reduce inventory quantities based on a sale
 const reduceInventoryFromSale = async (sale) => {
   try {
     if (!sale.store) {
@@ -97,6 +99,7 @@ const reduceInventoryFromSale = async (sale) => {
 
     // Get the inventory model for this store
     const InventoryModel = await getInventoryModelForStore(sale.store);
+    console.log(`Using inventory model for store: ${sale.store}`);
     
     // Track results of inventory updates
     const results = {
@@ -107,39 +110,45 @@ const reduceInventoryFromSale = async (sale) => {
     // Process each item in the sale
     for (const item of sale.items) {
       try {
-        // Find the product to get its details
-        const product = await mongoose.model('Product').findById(item.product);
+        // Directly look up the inventory item by ID - these IDs are from the inventory collection
+        console.log(`Looking up inventory item by ID: ${item.product}`);
+        let inventoryItem = await InventoryModel.findById(item.product);
         
-        if (!product) {
-          throw new Error(`Product not found: ${item.product}`);
+        if (!inventoryItem) {
+          console.log(`Item not found by ID, will try by itemCode if available`);
+          // Fall back to looking up by itemCode if ID lookup fails
+          if (item.itemCode) {
+            inventoryItem = await InventoryModel.findOne({
+              itemCode: item.itemCode,
+              variantName: item.variantName || ''
+            });
+          }
         }
-
-        // Find the inventory item
-        const inventoryItem = await InventoryModel.findOne({
-          itemCode: product.itemCode,
-          variantName: product.variantName || ''
-        });
 
         if (!inventoryItem) {
-          throw new Error(`Inventory item not found for product: ${product.itemCode} (${product.variantName || 'no variant'})`);
+          throw new Error(`Inventory item not found for ID: ${item.product}`);
         }
+
+        console.log(`Found inventory item: ${inventoryItem.name} (${inventoryItem.itemCode}), current quantity: ${inventoryItem.quantity}`);
 
         // Ensure there's enough inventory
         if (inventoryItem.quantity < item.quantity) {
-          throw new Error(`Insufficient inventory for ${product.name} (${product.variantName || 'no variant'}). Available: ${inventoryItem.quantity}, Requested: ${item.quantity}`);
+          throw new Error(`Insufficient inventory for ${inventoryItem.name}. Available: ${inventoryItem.quantity}, Requested: ${item.quantity}`);
         }
 
         // Update the inventory quantity
         inventoryItem.quantity -= item.quantity;
         await inventoryItem.save();
+        console.log(`Updated inventory quantity to: ${inventoryItem.quantity}`);
 
         results.successful.push({
-          itemCode: product.itemCode,
-          variantName: product.variantName || '',
+          itemCode: inventoryItem.itemCode,
+          variantName: inventoryItem.variantName || '',
           quantityReduced: item.quantity,
           newQuantity: inventoryItem.quantity
         });
       } catch (error) {
+        console.error(`Error reducing inventory for item ${item.product}:`, error);
         results.failed.push({
           product: item.product,
           quantity: item.quantity,
@@ -150,7 +159,7 @@ const reduceInventoryFromSale = async (sale) => {
 
     return results;
   } catch (error) {
-    console.error('Error reducing inventory:', error);
+    console.error('Error in reduceInventoryFromSale:', error);
     throw error;
   }
 };

@@ -18,34 +18,41 @@ const getStoreFilter = (storeId, user) => {
   return new mongoose.Types.ObjectId(storeId);
 };
 
-// @desc    Create new sale
+/// @desc    Create new sale
 // @route   POST /api/sales
 // @access  Private
 export const createSale = asyncHandler(async (req, res) => {
+
   // Parse items if it's a string (from FormData)
   const items = typeof req.body.items === 'string' ? 
     JSON.parse(req.body.items) : req.body.items;
+  
+  console.log("Received items:", items);
 
   const { customerName, totalAmount, salesman } = req.body;
 
-  // Validate items and calculate total
+  // Calculate total and validate items
   let calculatedTotal = 0;
-  const validatedItems = await Promise.all(items.map(async (item) => {
-    const product = await Product.findById(item.product);
-    if (!product) {
-      throw new Error(`Product not found: ${item.product}`);
-    }
+  const validatedItems = items.map(item => {
+    console.log("Processing item:", item);
     
-    const total = Number(item.price) * Number(item.quantity);
+    // Validate and calculate total
+    const quantity = Number(item.quantity);
+    const price = Number(item.price);
+    const total = quantity * price;
     calculatedTotal += total;
-
+    
+    // Return validated item with all necessary fields
     return {
-      product: product._id,
-      quantity: item.quantity,
-      price: item.price, // Taking from the form value
+      product: item.product, // This may be null or an ID that doesn't match a product
+      itemCode: item.itemCode || 'Unknown Code', // Use explicit field or fallback
+      productName: item.productName || 'Unknown Product', // Use explicit field or fallback
+      variantName: item.variantName || '',
+      quantity,
+      price,
       total
     };
-  }));
+  });
 
   // Create bill photo object if photo was uploaded
   const billPhoto = req.file ? {
@@ -64,36 +71,25 @@ export const createSale = asyncHandler(async (req, res) => {
     salesmanName: salesman
   });
 
-  // Now reduce inventory quantities based on the sale
+  // Reduce inventory quantities
   try {
     const inventoryResults = await reduceInventoryFromSale(sale);
+    console.log('Inventory update results:', inventoryResults);
     
-    // If there were any failed inventory updates, log them but don't fail the sale
+    // Log any failures
     if (inventoryResults.failed.length > 0) {
       console.warn('Some inventory updates failed:', inventoryResults.failed);
     }
-    
-    // Optionally add inventory update results to response for debugging
-    /*
-    sale.inventoryUpdates = {
-      successful: inventoryResults.successful.length,
-      failed: inventoryResults.failed.length
-    };
-    */
   } catch (error) {
-    // Log error but don't fail the sale creation
     console.error('Error updating inventory:', error);
-    // You might want to add a flag to the sale indicating inventory wasn't updated
-    // await Sale.findByIdAndUpdate(sale._id, { inventoryUpdated: false });
   }
 
+  // Return populated sale without the photo binary data
   const populatedSale = await Sale.findById(sale._id)
     .populate('store')
     .populate('salesperson', 'name')
-    .populate('items.product', 'name itemCode')
     .select('-billPhoto.data'); 
     
-  // Don't send the binary data of the photo in the response
   const saleResponse = populatedSale.toObject();
   if (saleResponse.billPhoto) {
     saleResponse.billPhoto = {
@@ -348,9 +344,6 @@ export const getSalesStats = asyncHandler(async (req, res) => {
 });
 
 
-// @desc    Get sale by ID
-// @route   GET /api/sales/:id
-// @access  Private
 export const getSaleById = asyncHandler(async (req, res) => {
   const sale = await Sale.findById(req.params.id)
     .populate('store')
@@ -364,7 +357,24 @@ export const getSaleById = asyncHandler(async (req, res) => {
       res.status(403);
       throw new Error('Not authorized to view this sale');
     }
-    res.json(sale);
+    
+    // Transform the sale to include product details even if product is null
+    const transformedSale = sale.toObject();
+    
+    // For each item, ensure product info is available even if product is null
+    transformedSale.items = transformedSale.items.map(item => {
+      if (!item.product) {
+        // If product is null, use the item's own fields
+        item.product = {
+          name: item.productName || 'Unknown Product',
+          itemCode: item.itemCode || 'Unknown Code',
+          variantName: item.variantName || ''
+        };
+      }
+      return item;
+    });
+    
+    res.json(transformedSale);
   } else {
     res.status(404);
     throw new Error('Sale not found');

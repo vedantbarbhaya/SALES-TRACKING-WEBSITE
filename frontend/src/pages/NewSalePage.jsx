@@ -570,76 +570,61 @@ const handleProductChange = (index, field, value) => {
     try {
       setLoading(true);
       setError('');
-  
-      // Use user's store ID if not admin
-      const storeId = user.role === 'admin' ? saleData.storeId : user.store._id;
-  
-      if (!storeId) {
-        throw new Error('Store ID is required');
-      }
       
+      // Check for required fields
+      if (!saleData.storeId) {
+        throw new Error('Please select a store');
+      }
+  
       if (saleData.items.length === 0) {
         throw new Error('Please add at least one product');
       }
   
-      // Clean and validate items
-      const cleanedItems = saleData.items.map(item => {
-        if (!item.product || !item.quantity || !item.price) {
-          throw new Error('Invalid product data');
-        }
-        
-        // Validate quantity against available inventory
-        if (item.availableQuantity !== undefined && item.quantity > item.availableQuantity) {
-          throw new Error(`Only ${item.availableQuantity} ${item.productDetails.name} available in stock`);
-        }
-        
-        return {
-          product: item.product,
-          quantity: item.quantity,
-          price: item.price
-        };
-      });
-  
       const formData = new FormData();
-    
-      const payload = {
-        customerName: saleData.customerName || '',
-        items: cleanedItems,
-        totalAmount: calculateTotal(),
-        store: storeId, // Use the determined store ID
-        salesman: user?.name || ''
-      };
-  
-      // Append items as a JSON string
-      formData.append('items', JSON.stringify(payload.items));
-      formData.append('customerName', payload.customerName);
-      formData.append('totalAmount', payload.totalAmount);
-      formData.append('store', payload.store);
-      formData.append('salesman', payload.salesman);
-      
       if (saleData.billPhoto) {
         formData.append('billPhoto', saleData.billPhoto);
       }
   
+      // Create the items array with all required product details
+      const items = saleData.items.map(item => ({
+        product: item.product,
+        itemCode: item.productDetails.itemCode,
+        productName: item.productDetails.name,
+        variantName: item.productDetails.variantName || '',
+        quantity: item.quantity,
+        price: item.price
+      }));
+  
+      // Log for debugging
+      console.log('Submitting sale with items:', items);
+  
+      // Append to FormData
+      formData.append('items', JSON.stringify(items));
+      formData.append('customerName', saleData.customerName || '');
+      formData.append('totalAmount', calculateTotal());
+      formData.append('store', saleData.storeId);
+      formData.append('salesman', user?.name || '');
+  
       const response = await createSale(formData);
+      console.log('Sale created successfully:', response);
   
-      if (!response || !response._id) {
-        throw new Error('Invalid response from server');
-      }
-  
+      // Clear form and show success message
       setSuccess('Sale recorded successfully!');
       setSaleData({
-        storeId: storeId,
+        storeId: user?.store?._id || '',
         customerName: '',
         date: new Date().toISOString().split('T')[0],
         items: [],
         billPhoto: null
       });
-      
-      setTimeout(() => {
-        navigate(`/sales/${response._id}`);
-      }, 3000);
   
+      // Navigate to the sale details page
+      setTimeout(() => {
+        setSuccess('');
+        if (response && response._id) {
+          navigate(`/sales/${response._id}`);
+        }
+      }, 1500);
     } catch (err) {
       setError(handleApiError(err));
     } finally {

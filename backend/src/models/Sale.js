@@ -3,8 +3,19 @@ import mongoose from 'mongoose';
 const saleItemSchema = new mongoose.Schema({
   product: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Product',
-    required: true
+    ref: 'Product'
+  },
+  itemCode: {
+    type: String,
+    default: 'Unknown Code'
+  },
+  productName: {
+    type: String,
+    default: 'Unknown Product'
+  },
+  variantName: {
+    type: String,
+    default: ''
   },
   quantity: {
     type: Number,

@@ -111,53 +111,107 @@ const SalesRecorder = () => {
       setLoading(true);
       setError('');
       
-      if (!saleData.storeId || !saleData.salesPersonId) {
-        throw new Error('Please select store and salesperson');
+      if (!saleData.storeId) {
+        throw new Error('Please select a store');
       }
-
+  
       if (saleData.items.length === 0) {
         throw new Error('Please add at least one product');
       }
-
+  
       const formData = new FormData();
       if (saleData.billPhoto) {
         formData.append('billPhoto', saleData.billPhoto);
       }
-
-      const salePayload = {
-        storeId: saleData.storeId,
-        salesPersonId: saleData.salesPersonId,
-        customerName: saleData.customerName,
-        date: saleData.date,
-        items: saleData.items.map(item => ({
-          product: item.product,
-          quantity: item.quantity,
-          price: item.price
-        })),
-        totalAmount: calculateTotal()
-      };
-
-      formData.append('data', JSON.stringify(salePayload));
+  
+      // Include itemCode and variantName for each item to help with inventory reduction
+      const items = saleData.items.map(item => ({
+        product: item.product,
+        itemCode: item.productDetails.itemCode,
+        variantName: item.productDetails.variantName || '',
+        quantity: item.quantity,
+        price: item.price
+      }));
+  
+      // Log what we're sending for debugging
+      console.log('Submitting sale with items:', items);
+  
+      // Append the data to FormData
+      formData.append('items', JSON.stringify(items));
+      formData.append('customerName', saleData.customerName || '');
+      formData.append('totalAmount', calculateTotal());
+      formData.append('store', saleData.storeId);
+      formData.append('salesman', user?.name || '');
+  
+      console.log('Submitting sale...');
       const response = await createSale(formData);
-
+      console.log('Sale created successfully:', response);
+  
       setSuccess('Sale recorded successfully!');
       setSaleData({
-        storeId: '',
-        salesPersonId: '',
+        storeId: user?.store?._id || '',
         customerName: '',
         date: new Date().toISOString().split('T')[0],
         items: [],
         billPhoto: null
       });
-
-      setTimeout(() => setSuccess(''), 3000);
+  
+      // Instead of using setTimeout for navigation, use it only for clearing the success message
+      setTimeout(() => {
+        setSuccess('');
+      }, 3000);
+      
+      // Navigate immediately if we have a sale ID
+      if (response && response._id) {
+        console.log(`Navigating to sale details: /sales/${response._id}`);
+        navigate(`/sales/${response._id}`);
+      } else {
+        console.warn('No sale ID returned, cannot navigate to details page', response);
+      }
     } catch (err) {
+      console.error('Error submitting sale:', err);
       setError(handleApiError(err));
     } finally {
       setLoading(false);
     }
   };
-
+  
+      // Log what we're sending for debugging
+      console.log('Submitting sale with payload:', salePayload);
+  
+      // Append the data to FormData
+      formData.append('items', JSON.stringify(salePayload.items));
+      formData.append('customerName', salePayload.customerName);
+      formData.append('totalAmount', salePayload.totalAmount);
+      formData.append('store', salePayload.storeId);
+      formData.append('salesman', salePayload.salesman);
+  
+      const response = await createSale(formData);
+      console.log('Sale created successfully:', response);
+  
+      setSuccess('Sale recorded successfully!');
+      setSaleData({
+        storeId: user?.store?._id || '',
+        customerName: '',
+        date: new Date().toISOString().split('T')[0],
+        items: [],
+        billPhoto: null
+      });
+  
+      setTimeout(() => {
+        setSuccess('');
+        // Optionally navigate to the details page
+        if (response && response._id) {
+          navigate(`/sales/${response._id}`);
+        }
+      }, 3000);
+    } catch (err) {
+      console.error('Error submitting sale:', err);
+      setError(handleApiError(err));
+    } finally {
+      setLoading(false);
+    }
+  };
   return (
     <Card className="w-full max-w-lg mx-auto">
       <CardHeader className="px-4 py-3">
