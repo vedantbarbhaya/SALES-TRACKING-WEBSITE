@@ -18,87 +18,92 @@ const getStoreFilter = (storeId, user) => {
   return new mongoose.Types.ObjectId(storeId);
 };
 
-/// @desc    Create new sale
+// @desc    Create new sale
 // @route   POST /api/sales
 // @access  Private
 export const createSale = asyncHandler(async (req, res) => {
-
-  // Parse items if it's a string (from FormData)
-  const items = typeof req.body.items === 'string' ? 
-    JSON.parse(req.body.items) : req.body.items;
-  
-  console.log("Received items:", items);
-
-  const { customerName, totalAmount, salesman } = req.body;
-
-  // Calculate total and validate items
-  let calculatedTotal = 0;
-  const validatedItems = items.map(item => {
-    console.log("Processing item:", item);
-    
-    // Validate and calculate total
-    const quantity = Number(item.quantity);
-    const price = Number(item.price);
-    const total = quantity * price;
-    calculatedTotal += total;
-    
-    // Return validated item with all necessary fields
-    return {
-      product: item.product, // This may be null or an ID that doesn't match a product
-      itemCode: item.itemCode || 'Unknown Code', // Use explicit field or fallback
-      productName: item.productName || 'Unknown Product', // Use explicit field or fallback
-      variantName: item.variantName || '',
-      quantity,
-      price,
-      total
-    };
-  });
-
-  // Create bill photo object if photo was uploaded
-  const billPhoto = req.file ? {
-    data: req.file.buffer,
-    contentType: req.file.mimetype
-  } : null;
-
-  // Create the sale
-  const sale = await Sale.create({
-    store: req.body.store,
-    salesperson: req.user._id,
-    customerName,
-    items: validatedItems,
-    totalAmount: calculatedTotal,
-    billPhoto,
-    salesmanName: salesman
-  });
-
-  // Reduce inventory quantities
   try {
-    const inventoryResults = await reduceInventoryFromSale(sale);
-    console.log('Inventory update results:', inventoryResults);
+    // Parse items if it's a string (from FormData)
+    const items = typeof req.body.items === 'string' ? 
+      JSON.parse(req.body.items) : req.body.items;
     
-    // Log any failures
-    if (inventoryResults.failed.length > 0) {
-      console.warn('Some inventory updates failed:', inventoryResults.failed);
+    console.log("Received items:", items);
+
+    const { customerName, totalAmount, salesman } = req.body;
+
+    // Calculate total and validate items
+    let calculatedTotal = 0;
+    const validatedItems = items.map(item => {
+      console.log("Processing item:", item);
+      
+      // Validate and calculate total
+      const quantity = Number(item.quantity);
+      const price = Number(item.price);
+      const total = quantity * price;
+      calculatedTotal += total;
+      
+      // Return validated item with all necessary fields
+      return {
+        product: item.product, // This may be null or an ID that doesn't match a product
+        itemCode: item.itemCode || 'Unknown Code', // Use explicit field or fallback
+        productName: item.productName || 'Unknown Product', // Use explicit field or fallback
+        variantName: item.variantName || '',
+        quantity,
+        price,
+        total
+      };
+    });
+
+    // Create bill photo object if photo was uploaded
+    const billPhoto = req.file ? {
+      data: req.file.buffer,
+      contentType: req.file.mimetype
+    } : null;
+
+    // Create the sale
+    const sale = await Sale.create({
+      store: req.body.store,
+      salesperson: req.user._id,
+      customerName,
+      items: validatedItems,
+      totalAmount: calculatedTotal,
+      billPhoto,
+      salesmanName: salesman
+    });
+
+    // Reduce inventory quantities
+    try {
+      const inventoryResults = await reduceInventoryFromSale(sale);
+      console.log('Inventory update results:', inventoryResults);
+      
+      // Log any failures
+      if (inventoryResults.failed.length > 0) {
+        console.warn('Some inventory updates failed:', inventoryResults.failed);
+      }
+    } catch (error) {
+      console.error('Error updating inventory:', error);
     }
+
+    // Return populated sale without the photo binary data
+    const populatedSale = await Sale.findById(sale._id)
+      .populate('store')
+      .populate('salesperson', 'name')
+      .select('-billPhoto.data'); 
+      
+    const saleResponse = populatedSale.toObject();
+    if (saleResponse.billPhoto) {
+      saleResponse.billPhoto = {
+        contentType: saleResponse.billPhoto.contentType,
+        exists: true
+      };
+    }
+
+    res.status(201).json(saleResponse);
   } catch (error) {
-    console.error('Error updating inventory:', error);
+    console.error('Error in createSale:', error);
+    res.status(500);
+    throw new Error(`Failed to create sale: ${error.message}`);
   }
-
-  // Return populated sale without the photo binary data
-  const populatedSale = await Sale.findById(sale._id)
-    .populate('store')
-    .populate('salesperson', 'name')
-    .select('-billPhoto.data'); 
-    
-  const saleResponse = populatedSale.toObject();
-  if (saleResponse.billPhoto) {
-    saleResponse.billPhoto = {
-      contentType: saleResponse.billPhoto.contentType,
-      exists: true
-    };
-  }
-
-  res.status(201).json(saleResponse);
 });
 
 // @desc    Get all sales for a store
