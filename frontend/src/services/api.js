@@ -7,29 +7,18 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  withCredentials: true // Add this if you're using credentials
+  withCredentials: true  // Essential for sending cookies
 });
 
-// Add auth token to requests
-api.interceptors.request.use(
-  (config) => {
-    const user = JSON.parse(localStorage.getItem('user') || 'null');
-    if (user?.token) {
-      config.headers.Authorization = `Bearer ${user.token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
-
-// Handle token expiration
+// Handle authentication errors
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('user');
+    // If we're not logged in yet, don't redirect to login page for auth errors
+    if (error.response?.status === 401 && 
+        !error.config.url.includes('/auth/login') && 
+        !error.config.url.includes('/auth/profile')) {
+      // Only redirect to login if it's not a login/profile API call
       window.location.href = '/login';
     }
     return Promise.reject(error);

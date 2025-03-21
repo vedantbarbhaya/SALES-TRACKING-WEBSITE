@@ -25,8 +25,10 @@ const LoginPage = () => {
 
     try {
       await login(email, password);
+      // Wait for login to complete before navigating
       navigate('/dashboard');
     } catch (err) {
+      console.error('Login error:', err);
       setError(err.response?.data?.message || 'Failed to login');
     } finally {
       setLoading(false);
