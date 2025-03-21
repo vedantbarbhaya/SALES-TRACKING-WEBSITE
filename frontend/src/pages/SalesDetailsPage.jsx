@@ -164,13 +164,13 @@ const SaleDetailsPage = () => {
 
             {/* Quantity and Price */}
             <div className="text-sm text-gray-500 mt-1">
-              {item.quantity} × ${item.price.toFixed(2)}
+              {item.quantity} × INR {item.price.toFixed(2)}
             </div>
           </div>
 
           {/* Total Price */}
           <div className="font-medium text-right">
-            ${(item.quantity * item.price).toFixed(2)}
+            INR {(item.quantity * item.price).toFixed(2)}
           </div>
         </div>
       </div>
@@ -180,14 +180,14 @@ const SaleDetailsPage = () => {
     <div className="pt-3 space-y-2">
       <div className="flex justify-between items-center text-sm text-gray-600">
         <span>Subtotal</span>
-        <span>${sale?.totalAmount.toFixed(2)}</span>
+        <span>INR {sale?.totalAmount.toFixed(2)}</span>
       </div>
 
       {/* Add any additional calculations if needed */}
 
       <div className="flex justify-between items-center pt-2 font-bold border-t">
         <span>Total</span>
-        <span>${sale?.totalAmount.toFixed(2)}</span>
+        <span>INR {sale?.totalAmount.toFixed(2)}</span>
       </div>
     </div>
   </div>

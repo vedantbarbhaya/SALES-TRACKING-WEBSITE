@@ -218,10 +218,10 @@ const SalesHistoryPage = () => {
                 <div className="max-w-xs">
                   {sale.items?.map((item, index) => (
                     <div key={index} className="text-xs mb-1">
-                      {item.product?.name || 'Unknown Product'}
-                      {item.product?.variantName && (
+                      {item.product?.name || item.productName || 'Unknown Product' }
+                      {item.product?.variantName || item.variantName && (
                         <span className="ml-1 px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded">
-                          {item.product.variantName}
+                          {item.product?.variantName || item.variantName}
                         </span>
                       )}
                       {(item.product?.department || item.product?.category || item.product?.subcategory) && (
@@ -243,7 +243,7 @@ const SalesHistoryPage = () => {
                 {sale.items?.length || 0}
               </td>
               <td className="px-4 py-3 text-sm text-right text-gray-600">
-                ${(sale.totalAmount || 0).toFixed(2)}
+                INR {(sale.totalAmount || 0).toFixed(2)}
               </td>
               <td className="px-4 py-3">
                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${

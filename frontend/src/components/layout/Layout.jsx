@@ -32,13 +32,13 @@ const Layout = () => {
   }, [location.pathname, isMobile]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="flex flex-col min-h-screen bg-gray-50">
       <Navbar />
-      <div className="flex h-[calc(100vh-4rem)]">
+      <div className="flex flex-grow overflow-hidden">
         {/* Sidebar */}
         <div
-          className={`fixed md:relative z-20 transform transition-all duration-300 ease-in-out ${
-            isSidebarCollapsed ? '-translate-x-full md:translate-x-0 md:w-16' : 'translate-x-0 w-64'
+          className={`sticky top-0 h-screen md:h-auto md:min-h-full transform transition-all duration-300 ease-in-out ${
+          isSidebarCollapsed ? '-translate-x-full md:translate-x-0 md:w-16' : 'translate-x-0 w-64'
           }`}
         >
           <Sidebar 
@@ -49,23 +49,18 @@ const Layout = () => {
 
         {/* Overlay for mobile */}
         {!isSidebarCollapsed && isMobile && (
-          <div
-            className="fixed inset-0 bg-black bg-opacity-50 z-10"
-            onClick={() => setSidebarCollapsed(true)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                setSidebarCollapsed(true);
-              }
-            }}
-            role="button"
-            tabIndex={0}
-          />
-        )}
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-10"
+          onClick={() => setSidebarCollapsed(true)}
+          role="button"
+          tabIndex={0}
+        />
+      )}
 
         {/* Main Content */}
         <main 
-          className={`flex-1 transition-all duration-300 ease-in-out ${
-            isSidebarCollapsed ? 'md:pl-16' : 'md:pl-64'
+         className={`flex-1 transition-all duration-300 ease-in-out ${
+          isSidebarCollapsed ? 'md:pl-16' : 'md:pl-64'
           }`}
         >
           <Outlet />

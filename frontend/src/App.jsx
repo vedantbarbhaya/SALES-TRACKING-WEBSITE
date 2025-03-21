@@ -7,6 +7,7 @@ import DashboardPage from './pages/Dashboard';
 import SalesHistoryPage from './pages/SalesHistoryPage';
 import SaleDetailsPage from './pages/SalesDetailsPage';
 import NewSalePage from './pages/NewSalePage';
+import ReportsPage from './pages/ReportsPage';
 
 // Admin-only route wrapper
 const AdminRoute = ({ children }) => {
@@ -61,6 +62,15 @@ function App() {
                 <DashboardPage />
               </AdminRoute>
             } />
+
+            <Route 
+              path="/reports" 
+              element={
+                <AdminRoute>
+                  <ReportsPage />
+                </AdminRoute>
+              } 
+            />
 
             {/* Sales routes - accessible to all authenticated users */}
             <Route path="/sales">

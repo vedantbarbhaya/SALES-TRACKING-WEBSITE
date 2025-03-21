@@ -28,9 +28,22 @@ import { getSales } from '@/services/sales';
 import { getStores } from '@/services/stores';
 import { handleApiError } from '@/utils/errorHandler';
 
+
+// Row component to handle expandable details
+
 // Row component to handle expandable details
 const SaleRow = ({ sale }) => {
   const [open, setOpen] = useState(false);
+  
+  // Debug the data structure when a row is expanded
+  useEffect(() => {
+    if (open) {
+      console.log('Expanded sale:', sale);
+      if (sale.items && sale.items.length > 0) {
+        console.log('First item example:', sale.items[0]);
+      }
+    }
+  }, [open, sale]);
 
   return (
     <>
@@ -45,7 +58,7 @@ const SaleRow = ({ sale }) => {
         <TableCell>{sale.store?.name}</TableCell>
         <TableCell>{sale.salesperson?.name}</TableCell>
         <TableCell>{sale.customerName || 'N/A'}</TableCell>
-        <TableCell>${sale.totalAmount.toFixed(2)}</TableCell>
+        <TableCell>INR {sale.totalAmount.toFixed(2)}</TableCell>
         <TableCell>
           <Chip
             label={sale.status}
@@ -71,34 +84,29 @@ const SaleRow = ({ sale }) => {
                     <TableCell>Product Code</TableCell>
                     <TableCell>Name</TableCell>
                     <TableCell>Variant</TableCell>
-                    <TableCell>Department</TableCell>
-                    <TableCell>Category</TableCell>
-                    <TableCell>Subcategory</TableCell>
-                    <TableCell align="right">Quantity</TableCell>
-                    <TableCell align="right">Price</TableCell>
+                    <TableCell>Quantity</TableCell>
+                    <TableCell>Price</TableCell>
                     <TableCell align="right">Total</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {sale.items.map((item) => (
-                    <TableRow key={item._id}>
-                      <TableCell>{item.product?.itemCode}</TableCell>
-                      <TableCell>{item.product?.name}</TableCell>
-                      <TableCell>{item.product?.variantName || '-'}</TableCell>
-                      <TableCell>{item.product?.department || '-'}</TableCell>
-                      <TableCell>{item.product?.category || '-'}</TableCell>
-                      <TableCell>{item.product?.subcategory || '-'}</TableCell>
-                      <TableCell align="right">{item.quantity}</TableCell>
-                      <TableCell align="right">${Number(item.price).toFixed(2)}</TableCell>
-                      <TableCell align="right">${(item.price * item.quantity).toFixed(2)}</TableCell>
+                  {sale.items.map((item, index) => (
+                    <TableRow key={index}>
+                      {/* Use direct item fields instead of product reference */}
+                      <TableCell>{item.itemCode || '-'}</TableCell>
+                      <TableCell>{item.productName || '-'}</TableCell>
+                      <TableCell>{item.variantName || '-'}</TableCell>
+                      <TableCell>{item.quantity}</TableCell>
+                      <TableCell>INR {Number(item.price).toFixed(2)}</TableCell>
+                      <TableCell align="right">INR {(item.quantity * item.price).toFixed(2)}</TableCell>
                     </TableRow>
                   ))}
                   <TableRow>
-                    <TableCell colSpan={8} align="right" sx={{ fontWeight: 'bold' }}>
+                    <TableCell colSpan={5} align="right" sx={{ fontWeight: 'bold' }}>
                       Total Amount:
                     </TableCell>
                     <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                      ${sale.totalAmount.toFixed(2)}
+                      INR {sale.totalAmount.toFixed(2)}
                     </TableCell>
                   </TableRow>
                 </TableBody>

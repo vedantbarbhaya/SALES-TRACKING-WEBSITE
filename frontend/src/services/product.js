@@ -17,8 +17,13 @@ export const getCategories = async () => {
 
 // New endpoints for department and subcategories
 export const getDepartments = async () => {
-  const { data } = await api.get('/products/departments');
-  return data;
+  try {
+    const { data } = await api.get('/products/departments');
+    return data;
+  } catch (error) {
+    console.error('Error fetching departments:', error);
+    return []; // Return an empty array to avoid undefined errors
+  }
 };
 
 export const getSubcategories = async (category) => {
