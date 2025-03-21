@@ -131,11 +131,17 @@ export const getSales = asyncHandler(async (req, res) => {
 
   // Add date filters if provided
   if (req.query.startDate) {
-    filter.createdAt = { $gte: new Date(req.query.startDate) };
+    const startDate = new Date(req.query.startDate);
+    // Set to beginning of day (00:00:00)
+    startDate.setHours(0, 0, 0, 0);
+    filter.createdAt = { $gte: startDate };
   }
   if (req.query.endDate) {
     if (!filter.createdAt) filter.createdAt = {};
-    filter.createdAt.$lte = new Date(req.query.endDate);
+    const endDate = new Date(req.query.endDate);
+    // Set to end of day (23:59:59.999)
+    endDate.setHours(23, 59, 59, 999);
+    filter.createdAt.$lte = endDate;
   }
 
   // Add search filter if provided

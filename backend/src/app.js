@@ -4,9 +4,23 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose'; 
+import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
+import { sanitizeInputs } from './middleware/sanitizer.js';
+
+
+// ES modules fix for __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Load env vars before other imports
-dotenv.config();
+const envFile = process.env.NODE_ENV === 'production' 
+  ? '.env.production' 
+  : '.env.development';
+
+console.log(`Loading environment from ${envFile}`);
+dotenv.config({ path: path.resolve(__dirname, `../${envFile}`) });
 
 import connectDB from './config/database.js';
 import { errorHandler } from './middleware/errorHandler.js';
@@ -20,23 +34,75 @@ import inventoryRoutes from './routes/inventory.js';
 
 
 
-// ES modules fix for __dirname
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // Connect to database
 connectDB();
 
 const app = express();
 
+
+
 // Middleware
+const allowedOrigins = (process.env.CORS_ORIGIN || '').split(',');
+
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
-  credentials: true
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
+  credentials: true,
+  optionsSuccessStatus: 200
 }));
 
+app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Security headers
+app.use(helmet());
+
+app.use(helmet.contentSecurityPolicy({
+  directives: {
+    defaultSrc: ["'self'"],
+    scriptSrc: ["'self'", "'unsafe-inline'"],
+    styleSrc: ["'self'", "'unsafe-inline'"],
+    imgSrc: ["'self'", "data:", "blob:"],
+    connectSrc: ["'self'", process.env.CORS_ORIGIN]
+  }
+}));
+
+// Rate limiting
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+});
+
+// Apply to all requests
+app.use(apiLimiter);
+
+// More strict rate limits for authentication routes
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // limit each IP to 10 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: 'Too many login attempts, please try again after 15 minutes'
+});
+
+// Apply sanitization to all routes
+app.use(sanitizeInputs);
+
+// Apply to auth routes
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
 
 // API Routes
 app.use('/api/auth', authRoutes);
@@ -47,67 +113,6 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/stores/inventory-mapping', storeInventoryMapRoutes);
 
-// temp code
-app.get('/api/direct-test', async (req, res) => {
-  try {
-    const db = mongoose.connection.db;
-    const collectionName = 'INV_KR1';
-    
-    // Check if collection exists
-    const collections = await db.listCollections({name: collectionName}).toArray();
-    const collectionExists = collections.length > 0;
-    
-    if (!collectionExists) {
-      return res.json({
-        error: `Collection ${collectionName} does not exist`,
-        availableCollections: await db.listCollections().toArray()
-      });
-    }
-    
-    // Get count and sample documents
-    const count = await db.collection(collectionName).countDocuments({});
-    const sample = await db.collection(collectionName).find({}).limit(2).toArray();
-    
-    res.json({
-      database: db.databaseName,
-      collection: collectionName,
-      exists: collectionExists,
-      count,
-      sample
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message, stack: error.stack });
-  }
-});
-
-app.get('/api/model-test', async (req, res) => {
-  try {
-    // Import the function dynamically
-    const { createInventoryModel } = await import('./models/InventoryFactory.js');
-    const collectionName = 'INV_KR1';
-    const modelName = `Inventory${collectionName.replace('INV_', '')}`;
-    
-    // Create the model
-    const InventoryModel = createInventoryModel(modelName, collectionName);
-    
-    // Test a find operation
-    const findResult = await InventoryModel.find({}).limit(5);
-    
-    res.json({
-      modelName,
-      collectionName,
-      modelRegistered: mongoose.models[modelName] ? true : false,
-      findResultCount: findResult.length,
-      findResult
-    });
-  } catch (error) {
-    res.status(500).json({ 
-      error: error.message, 
-      stack: error.stack 
-    });
-  }
-});
-// temp code
 
 // Serve static assets in production
 if (process.env.NODE_ENV === 'production') {
@@ -119,8 +124,6 @@ if (process.env.NODE_ENV === 'production') {
     res.sendFile(path.resolve(staticPath, 'index.html'));
   });
 }
-
-
 
 // Error Handler - should be after routes
 app.use(errorHandler);

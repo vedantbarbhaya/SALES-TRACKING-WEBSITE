@@ -1,13 +1,13 @@
-import { fileURLToPath } from 'url';
-import path from 'path';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 export const errorHandler = (err, req, res, next) => {
-  // Log error for debugging
-  console.error(`Error: ${err.message}`.red);
-  console.error(err.stack);
+  // Log error for debugging (but not in test environment)
+  if (process.env.NODE_ENV !== 'test') {
+    console.error(`Error: ${err.message}`);
+    
+    // Only log stack traces in development
+    if (process.env.NODE_ENV === 'development') {
+      console.error(err.stack);
+    }
+  }
 
   // Clean up uploaded files if there's an error
   if (req.file) {
@@ -15,6 +15,7 @@ export const errorHandler = (err, req, res, next) => {
     try {
       fs.unlinkSync(filePath);
     } catch (error) {
+      // Just log, don't fail the error handler
       console.error('Error deleting uploaded file:', error);
     }
   }
@@ -47,9 +48,9 @@ export const errorHandler = (err, req, res, next) => {
   // Send error response
   res.json({
     message: err.message,
-    stack: process.env.NODE_ENV === 'production' ? '🥞' : err.stack,
-    // Only send detailed error info in development
-    ...(process.env.NODE_ENV !== 'production' && { 
+    // Only include stack trace in development
+    ...(process.env.NODE_ENV === 'development' && { 
+      stack: err.stack,
       details: err.details || null,
       code: err.code || null
     })

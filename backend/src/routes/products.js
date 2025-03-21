@@ -1,3 +1,4 @@
+// product.js
 import express from 'express';
 import { protect, admin } from '../middleware/auth.js';
 import {
@@ -7,12 +8,13 @@ import {
   updateProduct,
   getProductByBarcode,
   getCategories,
-  getDepartments,      // New
-  getSubcategories,    // New
+  getDepartments,
+  getSubcategories,
   deactivateProduct,
   bulkUpdateProducts,
   searchProducts
 } from '../controllers/productController.js';
+import { productValidation } from '../middleware/validator.js';
 
 const router = express.Router();
 
@@ -26,7 +28,7 @@ router.get('/search', protect, searchProducts);
 // Protected routes
 router.route('/')
   .get(protect, getProducts)
-  .post(protect, admin, createProduct);
+  .post(protect, admin, productValidation, createProduct);
 
 // Bulk operations
 router.post('/bulk-update', protect, admin, bulkUpdateProducts);
@@ -34,9 +36,10 @@ router.post('/bulk-update', protect, admin, bulkUpdateProducts);
 // Individual product operations
 router.route('/:id')
   .get(protect, getProductById)
-  .put(protect, admin, updateProduct)
+  .put(protect, admin, productValidation, updateProduct)
   .delete(protect, admin, deactivateProduct);
 
 router.get('/departments', protect, getDepartments);
 router.get('/subcategories', protect, getSubcategories);
+
 export default router;

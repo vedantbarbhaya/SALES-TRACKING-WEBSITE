@@ -52,14 +52,24 @@ export const login = asyncHandler(async (req, res) => {
     const isMatch = await user.matchPassword(password);
     
     if (isMatch) {
-      // Success - generate token and return user data
+      // Generate token
+      const token = generateToken(user._id);
+      
+      // Set token in HTTP-only cookie
+      res.cookie('token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production', // Use secure in production
+        sameSite: 'strict',
+        maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+      });
+      
+      // Return user data without sending token in body
       res.json({
         _id: user._id,
         name: user.name,
         email: user.email,
         role: user.role,
-        store: user.store,
-        token: generateToken(user._id),
+        store: user.store
       });
     } else {
       console.log('Password verification failed');
@@ -95,13 +105,13 @@ export const registerUser = asyncHandler(async (req, res) => {
   });
 
   if (user) {
+    // Don't send token in the response, just user data
     res.status(201).json({
       _id: user._id,
       name: user.name,
       email: user.email,
       role: user.role,
-      store: user.store,
-      token: generateToken(user._id),
+      store: user.store
     });
   } else {
     res.status(400);
@@ -145,16 +155,28 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
 
     const updatedUser = await user.save();
 
+    // Don't send token in the response, just user data
     res.json({
       _id: updatedUser._id,
       name: updatedUser.name,
       email: updatedUser.email,
       role: updatedUser.role,
-      store: updatedUser.store,
-      token: generateToken(updatedUser._id),
+      store: updatedUser.store
     });
   } else {
     res.status(404);
     throw new Error('User not found');
   }
+});
+
+// @desc    Logout user
+// @route   POST /api/auth/logout
+// @access  Private
+export const logout = asyncHandler(async (req, res) => {
+  res.cookie('token', '', {
+    httpOnly: true,
+    expires: new Date(0)
+  });
+  
+  res.status(200).json({ message: 'Logged out successfully' });
 });

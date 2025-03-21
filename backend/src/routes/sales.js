@@ -1,3 +1,4 @@
+// sales.js
 import express from 'express';
 import { protect, admin } from '../middleware/auth.js';
 import {
@@ -14,12 +15,13 @@ import {
   issueSaleRefund
 } from '../controllers/salesController.js';
 import { upload } from '../config/upload.js';
+import { saleValidation } from '../middleware/validator.js';
 
 const router = express.Router();
 
 // Basic routes
 router.route('/')
-  .post(protect, upload.single('billPhoto'), createSale)
+  .post(protect, upload.single('billPhoto'), saleValidation, createSale)
   .get(protect, getSales);
 
 // Statistics routes

@@ -1,2 +1,7 @@
 node_modules
 maintenance_scripts
+.env
+.env.*
+!.env.example
+uploads/*
+!uploads/.gitkeep
