@@ -1,3 +1,4 @@
+// frontend/src/App.jsx
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { useAuth } from './hooks/useAuth';
@@ -9,19 +10,61 @@ import SaleDetailsPage from './pages/SalesDetailsPage';
 import NewSalePage from './pages/NewSalePage';
 import ReportsPage from './pages/ReportsPage';
 
-// Admin-only route wrapper
-const AdminRoute = ({ children }) => {
-  const { user } = useAuth();
+// Add this component to handle loading state
+const AppContent = () => {
+  const { loading, initialized, user } = useAuth();
   
-  if (user?.role !== 'admin') {
-    return <Navigate to="/sales/new" replace />;
+  if (!initialized) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      </div>
+    );
   }
-  
-  return children;
+
+  return (
+    <Routes>
+      {/* Public routes */}
+      <Route path="/login" element={<LoginPage />} />
+
+      {/* Protected routes wrapped in Layout */}
+      <Route element={<ProtectedLayout />}>
+        {/* Default route */}
+        <Route index element={<DefaultRoute />} />
+        
+        {/* Admin-only routes */}
+        <Route path="/dashboard" element={
+          <AdminRoute>
+            <DashboardPage />
+          </AdminRoute>
+        } />
+
+        <Route 
+          path="/reports" 
+          element={
+            <AdminRoute>
+              <ReportsPage />
+            </AdminRoute>
+          } 
+        />
+
+        {/* Sales routes - accessible to all authenticated users */}
+        <Route path="/sales">
+          <Route index element={<Navigate to="history" replace />} />
+          <Route path="history" element={<SalesHistoryPage />} />
+          <Route path="new" element={<NewSalePage />} />
+          <Route path=":id" element={<SaleDetailsPage />} />
+        </Route>
+
+        {/* Catch-all redirect */}
+        <Route path="*" element={<DefaultRoute />} />
+      </Route>
+    </Routes>
+  );
 };
 
 // Protected route with role-based redirect
-const ProtectedRoute = ({ children }) => {
+const ProtectedLayout = () => {
   const { user, loading } = useAuth();
   
   if (loading) {
@@ -32,6 +75,17 @@ const ProtectedRoute = ({ children }) => {
   
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+  
+  return <Layout />;
+};
+
+// Admin-only route wrapper
+const AdminRoute = ({ children }) => {
+  const { user } = useAuth();
+  
+  if (user?.role !== 'admin') {
+    return <Navigate to="/sales/new" replace />;
   }
   
   return children;
@@ -47,43 +101,7 @@ function App() {
   return (
     <AuthProvider>
       <Router>
-        <Routes>
-          {/* Public routes */}
-          <Route path="/login" element={<LoginPage />} />
-
-          {/* Protected routes wrapped in Layout */}
-          <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-            {/* Default route */}
-            <Route index element={<DefaultRoute />} />
-            
-            {/* Admin-only routes */}
-            <Route path="/dashboard" element={
-              <AdminRoute>
-                <DashboardPage />
-              </AdminRoute>
-            } />
-
-            <Route 
-              path="/reports" 
-              element={
-                <AdminRoute>
-                  <ReportsPage />
-                </AdminRoute>
-              } 
-            />
-
-            {/* Sales routes - accessible to all authenticated users */}
-            <Route path="/sales">
-              <Route index element={<Navigate to="history" replace />} />
-              <Route path="history" element={<SalesHistoryPage />} />
-              <Route path="new" element={<NewSalePage />} />
-              <Route path=":id" element={<SaleDetailsPage />} />
-            </Route>
-
-            {/* Catch-all redirect */}
-            <Route path="*" element={<DefaultRoute />} />
-          </Route>
-        </Routes>
+        <AppContent />
       </Router>
     </AuthProvider>
   );
